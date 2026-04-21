@@ -333,9 +333,9 @@ This order helps avoid over-interpreting a single metric, a single panel, or a s
 
 ## Demo Video
 
-<video src="./document/Demo_video.mp4" controls></video>
+![Demo Video](./document/Demo_video.gif)
 
-[Watch / Download `Demo_video.mp4`](./document/Demo_video.mp4)
+[Watch / Download `Demo_video.gif`](./document/Demo_video.gif)
 
 ## Contact
 
