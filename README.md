@@ -331,6 +331,12 @@ For day-to-day model diagnosis, the following sequence is recommended:
 
 This order helps avoid over-interpreting a single metric, a single panel, or a single statistical test.
 
+## Demo Video
+
+<video src="./document/Demo_video.mp4" controls></video>
+
+[Watch / Download `Demo_video.mp4`](./document/Demo_video.mp4)
+
 ## Contact
 
 - Author: Yafei Nie
