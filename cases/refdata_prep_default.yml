@@ -1,0 +1,98 @@
+# Default batch config for offline SITool reference-data utilities.
+#
+# Recommended usage:
+#   export SITOOL_RAW_REFDATA_DIR=/path/to/raw/reference/sources
+#   export SITOOL_REFDATA_DIR=/path/to/SIToolv2_RefData
+#   python -m scripts.preprocess.refdata.runner --config cases/refdata_prep_default.yml
+#
+# String values below support environment-variable expansion.
+
+ref_data_dir: ${SITOOL_REFDATA_DIR}
+
+prep_tasks:
+  # -------------------------
+  # SIconc
+  # -------------------------
+  - method: prep_NSIDC_SIconc
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/NSIDC/G02202_V5
+      hemisphere: nh
+  - method: prep_NSIDC_SIconc
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/NSIDC/G02202_V5
+      hemisphere: sh
+  - method: prep_OSI_SIconc
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/OSI/OSI-450/v3p1
+      hemisphere: nh
+  - method: prep_OSI_SIconc
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/OSI/OSI-450/v3p1
+      hemisphere: sh
+
+  # -------------------------
+  # SIdrift
+  # -------------------------
+  - method: prep_NSIDC_SIdrift
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/NSIDC/Polar_Pathfinder_sea_ice_motion
+      hemisphere: nh
+  - method: prep_NSIDC_SIdrift
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/NSIDC/Polar_Pathfinder_sea_ice_motion
+      hemisphere: sh
+  - method: prep_OSI_SIdrift
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/OSI/OSI-455/drift_lr
+      hemisphere: nh
+  - method: prep_OSI_SIdrift
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/OSI/OSI-455/drift_lr
+      hemisphere: sh
+
+  # -------------------------
+  # SNdepth
+  # -------------------------
+  - method: prep_MPMR_SNdepth
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}
+      grid_file: ${SITOOL_REFDATA_DIR}/Auxiliary/NSIDC0771_LatLon_PS_S25km_v1.0.nc
+  - method: prep_CTOHv2_SNdepth_cont
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/LEGOS
+      hemisphere: nh
+  - method: prep_CTOHv2_SNdepth_cont
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/LEGOS
+      hemisphere: sh
+  - method: prep_SnowLG_SNdepth
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/nsidc0758
+
+  # -------------------------
+  # SIthick
+  # -------------------------
+  - method: prep_CSBD_SIthick
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}
+  - method: prep_CTOHv2_SIthick_cont
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/LEGOS
+      hemisphere: nh
+  - method: prep_CTOHv2_SIthick_cont
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/LEGOS
+      hemisphere: sh
+  - method: prep_GIOMAS_SIthick
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/GIOMAS
+  - method: prep_TOPAZ_SIthick
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/TOPAZ4b
+  - method: prep_PIOMAS_SIthick
+    kwargs:
+      data_path: ${SITOOL_RAW_REFDATA_DIR}/PIOMAS
+
+# Optional post-preparation diagnostics. Keep empty by default.
+quick_check_tasks: []
+quick_look_tasks: []

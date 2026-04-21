@@ -1,0 +1,282 @@
+# SITool plotting options
+#
+# Load order:
+# 1) this file: cases/plot_options.yml
+# 2) optional case-level override: cases/<case_name>/plot_options.yml
+#
+# Notes:
+# - Keep section names identical to module names (SIconc/SIdrift/...)
+# - Remove any key to fall back to the built-in default
+# - line.* = line-chart runtime controls
+# - maps.* = spatial-map runtime controls
+
+global:
+  line:
+    # Model style cycles (used by many line plots)
+    model_colors: []
+    model_linestyles: []
+
+    # Figure size scaling (applies to most line figures)
+    figure_width_scale: 1.0
+    figure_height_scale: 1.0
+    min_figure_width: 3.0
+    min_figure_height: 2.0
+
+    # Curve style
+    model_linewidth: 1.1
+    # Set null to keep per-plot defaults
+    model_alpha: 0.9
+    obs1_linewidth: 1.3
+    obs2_linewidth: 1.2
+    # Optional: set null to keep per-figure defaults
+    subplot_wspace: 0.28
+    subplot_hspace: 0.34
+
+    # Zero-reference baseline style
+    zero_line_color: grey
+    zero_line_style: "--"
+    zero_line_width: 0.5
+    zero_line_alpha: 0.7
+
+    # Grid style
+    grid_enabled: true
+    grid_color: "0.80"
+    grid_style: "--"
+    grid_linewidth: 0.42
+    grid_alpha: 0.82
+
+    # Tick controls
+    date_tick_minticks: 4
+    date_tick_maxticks: 8
+    month_tick_interval: 2
+    month_tick_rotation: 25.0
+
+    # Legend controls
+    # Set null to keep builtin default fontsize
+    legend_fontsize: 10
+    legend_frameon: false
+    # Extra gap between axes bottom and bottom legend anchor
+    legend_y_gap_extra: 0.020
+    # Extra reserved bottom margin for bottom legends
+    legend_bottom_margin_extra: 0.022
+
+    # Symmetric y-limits around zero for anomaly-like charts
+    symmetric_ylim_pad_ratio: 0.08
+
+  typography:
+    # Shared text sizes used across line/map/colorbar annotations
+    main_title: 18
+    subplot_title: 15
+    axis_label: 12
+    tick: 10
+    legend: 10
+    colorbar_label: 12
+    colorbar_tick: 10
+
+  heatmap:
+    cmap: RdBu_r
+    ratio_vmin: 0.5
+    ratio_vmax: 5.0
+    # Main heat_map.png height scale (width unchanged)
+    main_height_scale: 0.50
+    # 2x2 seasonal heatmap layout (currently used by SIconc)
+    seasonal_subplot_wspace: 0.30
+    seasonal_subplot_hspace: 0.18
+    seasonal_colorbar_fraction: 0.018
+    seasonal_colorbar_pad: 0.055
+    seasonal_colorbar_aspect: 40
+    seasonal_height_scale: 0.84
+
+  maps:
+    # Generic map colormaps (module-level keys override these)
+    diff_cmap: RdBu_r
+    std_cmap: Purples
+    trend_cmap: RdBu_r
+
+    # Grid-panel size (inches per panel)
+    panel_width_factor: 5.0
+    panel_height_factor: 6.0
+
+    # Additional absolute scaling for fixed-size maps
+    figure_width_scale: 1.0
+    figure_height_scale: 1.0
+    min_figure_width: 3.0
+    min_figure_height: 3.0
+
+    # Spatial map subplot spacing
+    subplot_wspace: 0.03
+    subplot_hspace: 0.20
+
+    # Treat near-zero model-map values as missing (NaN / no fill)
+    model_zero_mask_eps: 1.0e-5
+
+    # Basemap styling
+    coastline_linewidth: 0.45
+    land_facecolor: grey
+    gridline_linewidth: 0.18
+    gridline_color: grey
+    gridline_linestyle: "--"
+    ice_shelf_facecolor: lightgrey
+
+    # Contour overlays (e.g. 15% sea-ice edge)
+    contour_linewidth: 1.0
+
+    # Shared bottom colorbar geometry
+    colorbar_fraction: 0.03
+    colorbar_pad: 0.07
+    colorbar_aspect: 42
+
+  output:
+    # Final image save options for all figures
+    dpi: 320
+    bbox_inches: tight
+
+SIconc:
+  heatmap:
+    # Seasonal 2x2 panel spacing and colorbar placement
+    seasonal_subplot_hspace: 0.24
+    seasonal_colorbar_pad: 0.080
+    seasonal_right_margin: 0.88
+
+  maps:
+    raw_cmap: YlGnBu
+    diff_cmap: RdBu_r
+    std_raw_cmap: Purples
+    std_diff_cmap: RdBu_r
+    trend_cmap: RdBu_r
+    # SIconc map colorbar: pull closer to map panels
+    colorbar_pad: 0.035
+    colorbar_fraction: 0.032
+    # SIconc map colorbar text ~= panel title size
+    colorbar_label_fontsize: 22
+    colorbar_tick_fontsize: 22
+
+  line:
+    # Keep bottom legends close but non-overlapping with axes
+    legend_y_gap_extra: 0.036
+    legend_bottom_margin_extra: 0.040
+    # Figure-specific legend gap knobs (SIconc only)
+    key_month_ano_legend_y_gap: 0.060
+    iiee_ts_legend_y_gap: 0.064
+
+  typography:
+    # SIconc map colorbar readability
+    colorbar_label: 15
+    colorbar_tick: 13
+
+SIdrift:
+  line:
+    # Key-month anomaly legend: centered under axes with extra clearance
+    key_month_ano_legend_y_gap: 0.072
+
+  heatmap:
+    # Slightly increase vertical gap between seasonal 2x2 panels
+    seasonal_subplot_hspace: 0.22
+    seasonal_colorbar_pad: 0.080
+    seasonal_right_margin: 0.86
+
+  maps:
+    mke_raw_cmap: viridis
+    mke_diff_cmap: RdBu_r
+    vectcorr_cmap: viridis
+    std_raw_cmap: Purples
+    std_diff_cmap: RdBu_r
+    trend_cmap: RdBu_r
+    # Keep map-colorbar style aligned with SIconc
+    colorbar_pad: 0.035
+    colorbar_fraction: 0.032
+    colorbar_label_fontsize: 22
+    colorbar_tick_fontsize: 22
+
+  vector:
+    quiver_skip: 3
+    speed_vmin: 0.0
+    speed_vmax: 0.3
+    quiver_scale: 1.0
+    quiver_width: 0.004
+    # Do not draw vectors for near-zero drift speed (m/s)
+    quiver_min_speed: 0.002
+
+SIthick:
+  heatmap:
+    # Slightly increase vertical gap between seasonal 2x2 panels
+    seasonal_subplot_hspace: 0.22
+    seasonal_colorbar_pad: 0.080
+    seasonal_right_margin: 0.86
+
+  line:
+    # Bottom legends: farther from axes, but closer to figure bottom
+    legend_y_gap_extra: 0.045
+    legend_bottom_margin_extra: 0.014
+
+  maps:
+    raw_cmap: viridis
+    diff_cmap: RdBu_r
+    std_raw_cmap: Purples
+    std_diff_cmap: RdBu_r
+    trend_cmap: RdBu_r
+    # Align map colorbar spacing with SIconc
+    colorbar_pad: 0.035
+    colorbar_fraction: 0.032
+    colorbar_label_fontsize: 22
+    colorbar_tick_fontsize: 22
+
+SNdepth:
+  heatmap:
+    seasonal_subplot_hspace: 0.22
+    seasonal_colorbar_pad: 0.080
+    seasonal_right_margin: 0.86
+
+  line:
+    # Bottom legends: farther from axes, but closer to figure bottom
+    legend_y_gap_extra: 0.045
+    legend_bottom_margin_extra: 0.014
+
+  maps:
+    raw_cmap: Blues
+    diff_cmap: RdBu_r
+    std_raw_cmap: Purples
+    std_diff_cmap: RdBu_r
+    trend_cmap: RdBu_r
+    # Align map colorbar spacing with SIconc
+    colorbar_pad: 0.035
+    colorbar_fraction: 0.032
+    colorbar_label_fontsize: 22
+    colorbar_tick_fontsize: 22
+
+SICB:
+  maps:
+    budget_cmap: RdBu_r
+    vmin: -100.0
+    vmax: 100.0
+    cbtick_bin: 20.0
+
+SIMbudget:
+  maps:
+    budget_cmap: RdBu_r
+    # null means auto-range from data (symmetric around zero)
+    vmin: null
+    vmax: null
+    cbtick_bin: null
+
+SNMbudget:
+  maps:
+    budget_cmap: RdBu_r
+    # null means auto-range from data (symmetric around zero)
+    vmin: null
+    vmax: null
+    cbtick_bin: null
+
+SItrans:
+  maps:
+    climatology_cmap: viridis
+    std_cmap: Purples
+    std_diff_cmap: RdBu_r
+    trend_cmap: RdBu_r
+    bias_cmap: RdBu_r
+    skill_heatmap_cmap: RdBu_r
+    # Keep SItrans map colorbar style consistent with SIthick
+    colorbar_pad: 0.035
+    colorbar_fraction: 0.032
+    colorbar_label_fontsize: 22
+    colorbar_tick_fontsize: 22

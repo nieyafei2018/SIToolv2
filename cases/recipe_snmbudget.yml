@@ -1,0 +1,199 @@
+variables:
+  common:
+    # Evaluation on which hemisphere, north or south
+    eval_hms:
+    - nh
+    - sh
+    eval_sic: true
+    eval_sid: true
+    eval_sit: true
+    eval_snd: true
+    eval_sicb: true
+    eval_sitrans: true
+    eval_simb: false
+    eval_snmb: true
+    common_masking: true
+    # For 'stere' and 'laea' projection, the unit of 'res' is [km], for 'lonlat', it is [degree]
+    grid_info:
+      proj: stere
+      res: 60
+    # For Antarctic, geographic regions including: Weddell, West Indian, East Indian, Ross, and AB
+    # For Arctic, including: CA, CBS, LESS, KBS, EG, HBB and CAA
+    sector:
+    - All
+    SIToolv2_RefData_path: /media/yafei/Data/Data/SIToolv2_RefData/
+    model_data_path: /media/yafei/Data/Data/CMIP6/SNMbudget/
+    # Compact recipe: define model list once, modules reuse by `model_group: all_models`
+    model_groups:
+      all_models:
+      - ACCESS-CM2
+      - CNRM-CM6-1
+      - CNRM-ESM2-1
+      - EC-Earth3
+      - IPSL-CM6A-LR
+      - IPSL-CM6A-LR-INCA
+      - MRI-ESM2-0
+
+  ##################
+  #     SIconc     #
+  ##################
+  SIconc:
+    # Chose observation references, default is NSIDC_CDR
+    # (the first one is the benchmark reference, the following ones are used for uncertainty estimate)
+    ref_nh:
+    - NSIDC_CDR_siconc_daily_nh_19790101-20241231.nc
+    - OSI-450_siconc_daily_nh_19790101-20231231.nc
+    ref_sh:
+    - NSIDC_CDR_siconc_daily_sh_19790101-20241231.nc
+    - OSI-450_siconc_daily_sh_19790101-20231231.nc
+    model_var: siconc
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_template: '{model}/siconc_*.nc'
+
+  ##################
+  #     SIdrift    #
+  ##################
+  SIdrift:
+    # Chose observation references
+    ref_nh:
+    - NSIDC_PolarPathfinder_sidrift_daily_nh_19790101-20231231.nc
+    - OSI-455_sidrift_daily_nh_19910101-20201231.nc
+    ref_sh:
+    - NSIDC_PolarPathfinder_sidrift_daily_sh_19790101-20231231.nc
+    - OSI-455_sidrift_daily_sh_19910101-20201231.nc
+    # Model variable names
+    model_var_u: siu
+    model_var_v: siv
+    # <lonlat>, <xy>, or <other> projection information, should be consistent with the model files
+    model_direction:
+    - null
+    - null
+    model_angle:
+    - null
+    - null
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_templates:
+      model_file_u: '{model}/siu_*.nc'
+      model_file_v: '{model}/siv_*.nc'
+
+  ##################
+  #     SIthick    #
+  ##################
+  SIthick:
+    # Chose observation references
+    ref_nh:
+    - PIOMAS_nh_sithick_mon_197901-202312.nc
+    - TOPAZ4b_nh_sithick_mon_199101-202312.nc
+    ref_sh:
+    - CTOH_sithick_monthly_sh_199404-202306.nc
+    - GIOMAS_sh_sithick_mon_197901-202312.nc
+    # Variable names in the observation files
+    ref_var: sithick_eff
+    model_var: sivol
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_template: '{model}/sivol_*.nc'
+
+  ##################
+  #     SNdepth    #
+  ##################
+  SNdepth:
+    # Chose observation references
+    ref_nh:
+    - SnowModel-LG_nh_snod_ERA5_v01_19800801-20210731.nc
+    - CTOH_sndepth_monthly_nh_199410-202304.nc
+    ref_sh:
+    - MPMR_SNdepth_sh_20020601-20200531_monmean.nc
+    - CTOH_sndepth_monthly_sh_199404-202306.nc
+    # Variable names in the observation files
+    ref_var: snow_depth_eff
+    model_var: sisnthick
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_template: '{model}/sisnthick_*.nc'
+
+  ##################
+  #     SItrans    #
+  ##################
+  SItrans:
+    # Chose observation references
+    ref_nh:
+    - NSIDC_CDR_siconc_daily_nh_19790101-20241231.nc
+    - OSI-450_siconc_daily_nh_19790101-20231231.nc
+    ref_sh:
+    - NSIDC_CDR_siconc_daily_sh_19790101-20241231.nc
+    - OSI-450_siconc_daily_sh_19790101-20231231.nc
+    model_var: siconc
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_template: '{model}/siconc_*.nc'
+
+  ##################
+  #      SICB      #
+  ##################
+  SICB:
+    # Chose observation references
+    ref_nh_sic:
+    - NSIDC_CDR_siconc_daily_nh_19790101-20241231.nc
+    - OSI-450_siconc_daily_nh_19790101-20231231.nc
+    ref_nh_sidrift:
+    - NSIDC_PolarPathfinder_sidrift_daily_nh_19790101-20231231.nc
+    - OSI-455_sidrift_daily_nh_19910101-20201231.nc
+    ref_sh_sic:
+    - NSIDC_CDR_siconc_daily_sh_19790101-20241231.nc
+    - OSI-450_siconc_daily_sh_19790101-20231231.nc
+    ref_sh_sidrift:
+    - NSIDC_PolarPathfinder_sidrift_daily_sh_19790101-20231231.nc
+    - OSI-455_sidrift_daily_sh_19910101-20201231.nc
+    model_var_sic: siconc
+    model_var_u: siu
+    model_var_v: siv
+    year_range:
+    - 2003
+    - 2010
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_templates:
+      model_file_sic: '{model}/siconc_*.nc'
+      model_file_u: '{model}/siu_*.nc'
+      model_file_v: '{model}/siv_*.nc'
+
+  ##################
+  #    SNMbudget   #
+  ##################
+  SNMbudget:
+    # Model variables' information (one entry per variable)
+    model_var_sndmassdyn: sndmassdyn
+    model_var_sndmassmelt: sndmassmelt
+    model_var_sndmasssi: sndmasssi
+    model_var_sndmasssnf: sndmasssnf
+    model_var_sndmasssubl: sndmasssubl
+    year_range:
+    - 1980
+    - 2014
+    stats_metric: RMSE
+    model_group: all_models
+    model_file_templates:
+      model_file_sndmassdyn: '{model}/sndmassdyn_*.nc'
+      model_file_sndmassmelt: '{model}/sndmassmelt_*.nc'
+      model_file_sndmasssi: '{model}/sndmasssi_*.nc'
+      model_file_sndmasssnf: '{model}/sndmasssnf_*.nc'
+      model_file_sndmasssubl: '{model}/sndmasssubl_*.nc'
+      model_file_areacello: '{model}/areacello_*.nc'
