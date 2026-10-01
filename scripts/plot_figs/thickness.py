@@ -7,6 +7,11 @@ from scripts.plot_figs import core as _core
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_axis_span_in_figure`.
+# Purpose: Handle axis span in figure workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _axis_span_in_figure(ax):
     if ax is None:
         return 0.10, 0.90, 0.10
@@ -14,6 +19,11 @@ def _axis_span_in_figure(ax):
     return float(bb.x0), float(bb.x1), float(bb.y0)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_legend_ncol_by_width`.
+# Purpose: Handle legend ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     n_items = max(1, len(labels))
     fs = float(fontsize)
@@ -22,53 +32,55 @@ def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     char_px = fs * float(fig.dpi) / 72.0 * 0.60
     item_px = max(70.0, char_px * (widest_chars + 8.0))
     max_fit = max(1, int(fig_width_px // item_px))
-    by_rows = max(1, int(math.ceil(n_items / max(1, int(target_rows)))))
-    return max(1, min(n_items, max_fit, by_rows))
+    max_rows = max(1, int(target_rows))
+
+    # Prefer fewer rows when width allows (e.g., 4 entries -> 1x4),
+    # then gracefully fall back to multi-row layouts.
+    for rows in range(1, max_rows + 1):
+        ncol = int(math.ceil(n_items / float(rows)))
+        if ncol <= max_fit:
+            return max(1, min(n_items, ncol))
+
+    return max(1, min(n_items, max_fit))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_place_adaptive_bottom_legend`.
+# Purpose: Handle place adaptive bottom legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _place_adaptive_bottom_legend(fig, ax, handles, labels, *,
-                                  target_rows=3, fontsize=None, y_gap=0.040):
-    if not handles or not labels:
-        return None
-    fs = _FS_LEGEND if fontsize is None else float(fontsize)
-    x0, x1, _ = _axis_span_in_figure(ax)
-    width = max(0.15, x1 - x0)
-    ncol = _legend_ncol_by_width(fig, labels, width, target_rows, fs)
-    n_rows = int(math.ceil(len(labels) / float(max(1, ncol))))
-    bottom_margin = min(
-        0.42,
-        max(0.12, 0.05 + 0.052 * n_rows) + max(0.0, float(_LINE_LEGEND_BOTTOM_MARGIN_EXTRA)),
-    )
-    fig.subplots_adjust(bottom=bottom_margin)
-    x0, x1, y0 = _axis_span_in_figure(ax)
-    width = max(0.15, x1 - x0)
-    gap_auto = float(y_gap) + 0.004 * max(0, n_rows - 1)
-    legend_top = max(
-        0.01,
-        y0 - gap_auto - max(0.0, float(_LINE_LEGEND_Y_GAP_EXTRA)),
-    )
-    return fig.legend(
-        handles, labels,
-        loc='upper left',
-        bbox_to_anchor=(x0, legend_top, width, 0.01),
-        bbox_transform=fig.transFigure,
-        ncol=ncol,
-        mode='expand',
-        fontsize=fs,
-        frameon=_LINE_LEGEND_FRAMEON,
-        borderaxespad=0.0,
+                                  target_rows=3, fontsize=None, y_gap=0.040,
+                                  max_width_frac: Optional[float] = None,
+                                  min_ncol: Optional[int] = None,
+                                  bottom_margin_min: Optional[float] = None,
+                                  expand: bool = True):
+    # Keep legacy signature for call-site compatibility; all line-chart legends
+    # are now routed through the shared top-legend strategy in core.
+    return _place_unified_line_legend(
+        fig,
+        ax,
+        handles,
+        labels,
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sit_key_month_ano`.
+# Purpose: Handle plot sit key month ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sit_key_month_ano(sit_metric_all, model_labels, year_range, month,
                            hms=None, fig_name=None, line_style=None, color=None,
-                           model_spread_payloads=None, **kwargs):
+                           model_spread_payloads=None, obs_count: Optional[int] = None, **kwargs):
     """Plot key-month sea-ice volume anomaly series for obs and models."""
     mtag = _month_tag(month)
     mlabel = _month_tag(month).capitalize()
 
     if not sit_metric_all:
         return
+
+    group_only_mode = bool(kwargs.pop('group_only_mode', False))
 
     fig, ax = plt.subplots(1, 1, figsize=_line_figsize(10, 4))
     ax.axhline(0, **_line_zero_style(alpha=0.7))
@@ -77,13 +89,19 @@ def plot_sit_key_month_ano(sit_metric_all, model_labels, year_range, month,
     for lb in labels_seq:
         if _is_group_label(lb) and lb not in group_rank:
             group_rank[lb] = len(group_rank)
-    n_obs = 0
-    for lbl in labels_seq[:len(sit_metric_all)]:
-        if _is_obs_label(lbl):
-            n_obs += 1
-        else:
-            break
-    n_obs = max(1, n_obs)
+    if obs_count is not None:
+        try:
+            n_obs = max(1, min(int(obs_count), len(sit_metric_all)))
+        except Exception:
+            n_obs = 1
+    else:
+        n_obs = 0
+        for lbl in labels_seq[:len(sit_metric_all)]:
+            if _is_obs_label(lbl):
+                n_obs += 1
+            else:
+                break
+        n_obs = max(1, n_obs)
 
     for jj, metric_dict in enumerate(sit_metric_all):
         x, y = _extract_key_month_series(
@@ -92,18 +110,24 @@ def plot_sit_key_month_ano(sit_metric_all, model_labels, year_range, month,
         if y.size == 0:
             continue
         label = model_labels[jj] if jj < len(model_labels) else f'dataset{jj + 1}'
+        spread_idx = jj - n_obs
+        has_group_spread = (
+            spread_idx >= 0
+            and isinstance(model_spread_payloads, (list, tuple))
+            and spread_idx < len(model_spread_payloads)
+            and model_spread_payloads[spread_idx] is not None
+        )
         if jj < n_obs:
             style = _obs_style(jj)
             ax.plot(x, y, label=label, **style)
-        elif _is_group_label(label):
-            style = _group_style(group_rank.get(label, 0))
+        elif group_only_mode or _is_group_label(label) or has_group_spread:
+            style = _group_style(group_rank.get(label, max(0, spread_idx)))
             ax.plot(x, y, label=label, **style)
         else:
             ls, cr = _get_style(jj, n_obs, line_style, color)
             style = {'linestyle': ls, 'color': cr, 'lw': _line_model_width(0.8)}
             ax.plot(x, y, linestyle=ls, color=cr, lw=_line_model_width(0.8), label=label, **kwargs)
-        if jj >= n_obs and isinstance(model_spread_payloads, (list, tuple)):
-            spread_idx = jj - n_obs
+        if spread_idx >= 0 and isinstance(model_spread_payloads, (list, tuple)):
             if spread_idx < len(model_spread_payloads):
                 spread_metric = model_spread_payloads[spread_idx] or {}
                 xs, ys = _extract_key_month_series(
@@ -134,19 +158,29 @@ def plot_sit_key_month_ano(sit_metric_all, model_labels, year_range, month,
         target_rows=3,
         fontsize=max(10, _FS_LEGEND),
         y_gap=0.056,
+        min_ncol=1,
+        bottom_margin_min=0.23,
+        expand=True,
     )
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_snd_key_month_ano`.
+# Purpose: Handle plot snd key month ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_snd_key_month_ano(snd_metric_all, model_labels, year_range, month,
                            hms=None, fig_name=None, line_style=None, color=None,
-                           model_spread_payloads=None, **kwargs):
+                           model_spread_payloads=None, obs_count: Optional[int] = None, **kwargs):
     """Plot key-month snow-volume anomaly series for obs and models."""
     mtag = _month_tag(month)
     mlabel = _month_tag(month).capitalize()
 
     if not snd_metric_all:
         return
+
+    group_only_mode = bool(kwargs.pop('group_only_mode', False))
 
     fig, ax = plt.subplots(1, 1, figsize=_line_figsize(10, 4))
     ax.axhline(0, **_line_zero_style(alpha=0.7))
@@ -155,13 +189,19 @@ def plot_snd_key_month_ano(snd_metric_all, model_labels, year_range, month,
     for lb in labels_seq:
         if _is_group_label(lb) and lb not in group_rank:
             group_rank[lb] = len(group_rank)
-    n_obs = 0
-    for lbl in labels_seq[:len(snd_metric_all)]:
-        if _is_obs_label(lbl):
-            n_obs += 1
-        else:
-            break
-    n_obs = max(1, n_obs)
+    if obs_count is not None:
+        try:
+            n_obs = max(1, min(int(obs_count), len(snd_metric_all)))
+        except Exception:
+            n_obs = 1
+    else:
+        n_obs = 0
+        for lbl in labels_seq[:len(snd_metric_all)]:
+            if _is_obs_label(lbl):
+                n_obs += 1
+            else:
+                break
+        n_obs = max(1, n_obs)
 
     for jj, metric_dict in enumerate(snd_metric_all):
         x, y = _extract_key_month_series(
@@ -170,18 +210,24 @@ def plot_snd_key_month_ano(snd_metric_all, model_labels, year_range, month,
         if y.size == 0:
             continue
         label = model_labels[jj] if jj < len(model_labels) else f'dataset{jj + 1}'
+        spread_idx = jj - n_obs
+        has_group_spread = (
+            spread_idx >= 0
+            and isinstance(model_spread_payloads, (list, tuple))
+            and spread_idx < len(model_spread_payloads)
+            and model_spread_payloads[spread_idx] is not None
+        )
         if jj < n_obs:
             style = _obs_style(jj)
             ax.plot(x, y, label=label, **style)
-        elif _is_group_label(label):
-            style = _group_style(group_rank.get(label, 0))
+        elif group_only_mode or _is_group_label(label) or has_group_spread:
+            style = _group_style(group_rank.get(label, max(0, spread_idx)))
             ax.plot(x, y, label=label, **style)
         else:
             ls, cr = _get_style(jj, n_obs, line_style, color)
             style = {'linestyle': ls, 'color': cr, 'lw': _line_model_width(0.8)}
             ax.plot(x, y, linestyle=ls, color=cr, lw=_line_model_width(0.8), label=label, **kwargs)
-        if jj >= n_obs and isinstance(model_spread_payloads, (list, tuple)):
-            spread_idx = jj - n_obs
+        if spread_idx >= 0 and isinstance(model_spread_payloads, (list, tuple)):
             if spread_idx < len(model_spread_payloads):
                 spread_metric = model_spread_payloads[spread_idx] or {}
                 xs, ys = _extract_key_month_series(
@@ -212,10 +258,18 @@ def plot_snd_key_month_ano(snd_metric_all, model_labels, year_range, month,
         target_rows=3,
         fontsize=max(10, _FS_LEGEND),
         y_gap=0.056,
+        min_ncol=1,
+        bottom_margin_min=0.23,
+        expand=True,
     )
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sit_ts`.
+# Purpose: Handle plot sit ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sit_ts(SIT_AllModel, SIT_DIFF_AllModel,
                 model_labels, fig_name,
                 line_style=None, color=None, model_spread_payloads=None, **kwargs):
@@ -318,6 +372,11 @@ def plot_sit_ts(SIT_AllModel, SIT_DIFF_AllModel,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sit_ano`.
+# Purpose: Handle plot sit ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sit_ano(SIT_AllModel, SIT_DIFF_AllModel, model_labels, year_range,
                  hms=None, line_style=None, color=None, fig_name=None,
                  model_spread_payloads=None):
@@ -408,6 +467,11 @@ def plot_sit_ano(SIT_AllModel, SIT_DIFF_AllModel, model_labels, year_range,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sit_map`.
+# Purpose: Handle plot sit map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sit_map(lon, lat, SIT_DIFF_AllModel, mon, hms, data_range, diff_range, unit='m',
                  cm='viridis', diff_cm='RdBu_r',
                  model_labels=None, plot_mode='mixed', fig_name=None, **kwargs):
@@ -548,6 +612,11 @@ def plot_sit_map(lon, lat, SIT_DIFF_AllModel, mon, hms, data_range, diff_range, 
 
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_snd_ts`.
+# Purpose: Handle plot snd ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_snd_ts(SND_AllModel, SND_DIFF_AllModel,
                 model_labels, fig_name,
                 line_style=None, color=None, model_spread_payloads=None, **kwargs):
@@ -647,6 +716,11 @@ def plot_snd_ts(SND_AllModel, SND_DIFF_AllModel,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_snd_ano`.
+# Purpose: Handle plot snd ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_snd_ano(SIT_AllModel, SIT_DIFF_AllModel, model_labels, year_range, line_style=None, color=None, fig_name=None,
                  model_spread_payloads=None):
     """Plot snow-volume anomaly time series."""
@@ -736,6 +810,11 @@ def plot_snd_ano(SIT_AllModel, SIT_DIFF_AllModel, model_labels, year_range, line
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_snd_map`.
+# Purpose: Handle plot snd map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_snd_map(lon, lat, SND_DIFF_AllModel, mon, hms, data_range, diff_range, unit='m',
                  cm='Blues', diff_cm='RdBu_r',
                  model_labels=None, plot_mode='mixed', fig_name=None, **kwargs):

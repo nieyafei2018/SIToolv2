@@ -83,28 +83,34 @@ Note: `environment.yml` installs `python-cdo`, but runtime still depends on a sy
 
 ## 4. Quick Start
 
-### 4.1 Prepare a Recipe
+### 4.1 Prepare Reference Data (`--prep-ref`)
 
-Create or copy a file under `cases/`:
+Before running an evaluation for the first time, the observational reference files must be prepared into the `SIToolv2_RefData` layout. The `--prep-ref` mode converts raw observational data into this layout, driven by a YAML config that lists preparation tasks and raw-data source paths.
 
-```text
-cases/recipe_<case_name>.yml
+```bash
+# Prepare reference data using the user config (default)
+python main.py --prep-ref
+
+# Specify a custom config
+python main.py --prep-ref --config cases/refdata_prep_default.yml
+
+# Abort on the first path-validation failure instead of skipping
+python main.py --prep-ref --strict
+
+# Parallel: 8 outer tasks, 4 inner threads each
+python main.py --prep-ref -j 8 -J 4
 ```
 
-Available example recipes in this repository include:
+Two config templates are included:
 
-- `cases/recipe_highres.yml`
-- `cases/recipe_simbudget.yml`
-- `cases/recipe_snmbudget.yml`
+- `cases/refdata_prep_default.yml` — uses `${SITOOL_RAW_REFDATA_DIR}` and `${SITOOL_REFDATA_DIR}` environment variables
+- `cases/refdata_prep_user.yml` — same structure, intended for user-specific path overrides
 
-In `recipe`, at least these two root directories must be configured correctly:
-
-- `SIToolv2_RefData_path`: root directory of reference data
-- `model_data_path`: root directory of model data
+The log for a `--prep-ref` run is written to `<ref_data_dir>/prep_ref.log`.
 
 ### 4.2 `SIToolv2_RefData` Directory and File Layout
 
-`SIToolv2_RefData_path` in recipe should point to a directory with the following structure.
+`SIToolv2_RefData_path` in the recipe should point to a directory with the following structure.
 This is the full layout corresponding to the built-in offline reference-data preparation workflow
 (`cases/refdata_prep_default.yml`) and the example recipes in this repository:
 
@@ -155,34 +161,71 @@ Notes:
   (for example `NSIDC_CDR_siconc_daily_nh_19790101-20241231.nc`), not relative paths.
 - You only need files that are explicitly referenced by your recipe; extra files in the same module directory are allowed.
 
-### 4.3 Run
+### 4.3 Prepare a Recipe
+
+Create or copy a file under `cases/`:
+
+```text
+cases/recipe_<case_name>.yml
+```
+
+Available example recipes in this repository include:
+
+- `cases/recipe_highres.yml`
+- `cases/recipe_simbudget.yml`
+- `cases/recipe_snmbudget.yml`
+
+In the recipe, at least these two root directories must be configured correctly:
+
+- `SIToolv2_RefData_path`: root directory of reference data
+- `model_data_path`: root directory of model data
+
+### 4.4 Run
 
 ```bash
 # Run all enabled modules in recipe_highres.yml
-python main.py highres
+python main.py --eval highres
 
 # Run specific modules
-python main.py highres --modules SIconc SIdrift
+python main.py --eval highres --modules SIconc SIdrift
 
 # Force recomputation (ignore cache) and print more detailed logs
-python main.py highres --recalculate --log-level DEBUG
+python main.py --eval highres --recalculate --log-level DEBUG
+
+# Parallel execution with 12 workers
+python main.py --eval highres -j 12
 ```
 
-### 4.4 CLI Arguments
+> Note: the legacy positional form `python main.py highres` still works but prints a deprecation warning. Prefer `--eval`.
+
+### 4.5 CLI Arguments
+
+**Evaluation mode (`--eval`):**
 
 ```text
-python main.py <case_name> [--modules ...] [--log-level ...] [--recalculate] [-j N] [--keep-staging] [--rotate FILE,VAR]
+python main.py --eval <case> [--modules ...] [--log-level ...] [--recalculate] [-j N] [--keep-staging]
 ```
 
-- `case_name`: maps to `cases/recipe_<case_name>.yml`
-- `--modules`: choose from `SIconc SIdrift SIthick SNdepth SICB SIMbudget SNMbudget SItrans`
-- `--log-level`: `DEBUG|INFO|WARNING|ERROR`
-- `--recalculate`: ignore cache and recompute metrics
-- `-j/--jobs`: total parallel workers (the scheduler will cap to safe values automatically)
-- `--keep-staging`: keep per-run staging files under `cases/<case>/metrics/_staging`
-- `--rotate`: currently kept for backward compatibility; no longer an active control in the main workflow
+- `--eval CASE`: evaluation case name; maps to `cases/recipe_<CASE>.yml`
+- `--modules`: one or more of `SIconc SIdrift SIthick SNdepth SICB SIMbudget SNMbudget SItrans` (default: all enabled in recipe)
+- `--log-level`: `DEBUG|INFO|WARNING|ERROR` (default: `INFO`)
+- `--recalculate`: ignore cached metrics and recompute all requested module diagnostics
+- `-j/--jobs N`: total parallel worker threads (the scheduler caps to safe values automatically; default: 1)
+- `--keep-staging`: keep per-run staging artifacts under `cases/<case>/metrics/_staging`
+- `--rotate FILE,VAR`: **deprecated and ignored** (kept only for backward compatibility)
 
 > Note: with `--jobs=1`, modules run sequentially (hemisphere-major); larger values enable dynamic task scheduling.
+
+**Reference data preparation mode (`--prep-ref`):**
+
+```text
+python main.py --prep-ref [--config PATH] [--strict] [-j N] [-J M] [--log-level ...]
+```
+
+- `--config PATH`: YAML task config (default: `cases/refdata_prep_user.yml`)
+- `--strict`: abort on any path-validation failure instead of skipping
+- `-j/--jobs N`: number of concurrent preparation tasks
+- `-J/--inner-jobs M`: inner-loop thread count per task (e.g., per-year file loops; default: 1)
 
 ## 5. Output Directory Layout
 
@@ -190,16 +233,17 @@ After one run (`<case>` example: `highres`):
 
 ```text
 cases/<case>/
-|-- <case>.log
 |-- cpu_realtime_efficiency_latest.png            # real CPU utilization figure (generated when jobs > 1)
 |-- Processed/
 |   |-- nh/
 |   `-- sh/
 |-- Output/
+|   |-- <case>.log                                # complete runtime log
 |   |-- summary_report.html
 |   |-- report_download.js                        # browser-side xlsx export helper
 |   |-- report_cross_module.js                    # cross-module explorer logic
-|   |-- cross_module_metrics.json                 # flattened scalar payload
+|   |-- cross_module_metrics.json                 # flattened scalar payload (JSON)
+|   |-- cross_module_metrics.js                   # same payload wrapped as JS module (for HTML)
 |   |-- .metric_tables.pkl                        # internal snapshot for incremental report refresh
 |   |-- nh/
 |   |   |-- SIconc/
@@ -212,11 +256,13 @@ cases/<case>/
 |   |   `-- SItrans/
 |   `-- sh/
 |       `-- ...
-`-- metrics/
-    |-- nh_SIconc_metrics.nc
-    |-- nh_SIdrift_metrics.nc
-    |-- ...
-    `-- <case>_all_metrics.nc                     # optional (enabled by SITOOL_BUILD_UNIFIED_CACHE=1)
+|-- metrics/
+|   |-- nh_SIconc_metrics.nc
+|   |-- nh_SIdrift_metrics.nc
+|   |-- ...
+|   `-- <case>_all_metrics.nc                     # optional (enabled by SITOOL_BUILD_UNIFIED_CACHE=1)
+`-- logs/
+    `-- workers/                                  # per-module worker logs (generated when jobs > 1)
 ```
 
 Notes:
@@ -224,9 +270,10 @@ Notes:
 - `Processed/`: intermediate files after regridding
 - `Output/<hms>/<module>/`: PNG figures
 - `Output/summary_report.html`: consolidated interactive report
+- `Output/<case>.log`: complete runtime log
 - `Output/cross_module_metrics.json`: scalar-table records for cross-module analysis
-- `<case>.log`: complete runtime log
-- `metrics/`: module cache files
+- `metrics/`: module cache files (named `<hms>_<Module>_metrics.nc`)
+- `logs/workers/`: per-module worker logs, useful for debugging parallel runs
 
 ## 6. How to Read `summary_report.html` Scientifically
 
@@ -249,8 +296,8 @@ After running SITool v2, all figures and statistical metrics are compiled into t
 2. **View axis**
    
    - `Raw Values`: absolute climatology/variability/trend values
-   - `Differences`: physical-difference diagnostics relative to `obs1` (keeps native units in each column; smaller absolute value means closer to `obs1`)
-   - In `Differences` tables: `obs1` row is `0`, `obs2` row is `|obs2-obs1|`, model rows are `|model-obs1|`
+   - `Differences`: diagnostics defined as model/reference difference terms relative to `obs1` (native units are preserved per column)
+   - In `Differences` tables: `obs1` row is `0`, `obs2` row is `obs2-vs-obs1`, model rows are `model-vs-obs1` (whether sign is kept depends on each metric definition, e.g., bias/correlation can be signed)
 
 3. **Domain axis**
    
@@ -299,8 +346,9 @@ Recommended reading order: `Raw Values` first (physical realism), `Differences` 
 ### 6.4 Figure Semantics in HTML
 
 - `_raw` and `_diff` figure suffixes follow table view semantics
-- `Differences` tables keep physical units; only heatmap figures use ratio-to-observational-uncertainty (`|E_model| / |E_obs2|`) for model rows
+- `Differences` tables keep physical units; only heatmap figures use Lin et al. (2021) normalization for model rows: `|E_model| / |E_obs2|`
 - In heatmaps, the `obs2` row is displayed as physical baseline values (`|E_obs2|`), while model rows are ratio-colored
+- Heatmap colorbars for normalized mode are explicitly labeled as `Ratio = |E_model| / |E_obs2|`
 - For heatmaps, correlation-like metrics are internally converted to error form (`1 - |r|`) before ratioing
 - Trend interpretation should always be paired with significance diagnostics
 

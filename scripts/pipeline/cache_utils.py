@@ -8,6 +8,11 @@ from scripts.pipeline import app as _app
 globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_parallel_map_ordered`.
+# Purpose: Handle parallel map ordered workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _parallel_map_ordered(
     items: List[Any],
     worker_fn,
@@ -35,6 +40,11 @@ def _parallel_map_ordered(
     metric_thread_labels = ('model-metrics', 'model-budget', 'model-transition')
     metric_stage = bool(task_label and any(token in str(task_label) for token in metric_thread_labels))
 
+    # -----------------------------------------------------------------------------
+    # Function: `_run_metric_stage_with_processes`.
+    # Purpose: Handle run metric stage with processes workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _run_metric_stage_with_processes(process_workers: int) -> Optional[List[Any]]:
         import queue as queue_mod
         from collections import deque as _deque
@@ -65,6 +75,11 @@ def _parallel_map_ordered(
         running: Dict[int, Any] = {}
         reported: set = set()
 
+        # -----------------------------------------------------------------------------
+        # Function: `_proc_entry`.
+        # Purpose: Handle proc entry workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _proc_entry(item_idx: int, payload: Any, queue_obj) -> None:
             try:
                 out_val = worker_fn(payload)
@@ -201,12 +216,22 @@ def _parallel_map_ordered(
     return results
 
 
+# -----------------------------------------------------------------------------
+# Function: `_case_dir_from_output_dir`.
+# Purpose: Handle case dir from output dir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _case_dir_from_output_dir(case_name: str, output_dir: str) -> Path:
     """Resolve the case directory from an output path."""
     out = Path(output_dir)
     return out.parent.parent if out.parent.name == 'Output' else _resolve_case_run_dir(case_name, log_warning=False)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_stage_dir`.
+# Purpose: Handle get stage dir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_stage_dir(case_name: str, output_dir: str, hemisphere: str, module: str) -> Path:
     """Return the per-run staging directory for parallel worker payloads."""
     case_dir = _case_dir_from_output_dir(case_name, output_dir)
@@ -216,6 +241,11 @@ def _get_stage_dir(case_name: str, output_dir: str, hemisphere: str, module: str
     return stage_dir
 
 
+# -----------------------------------------------------------------------------
+# Function: `_save_pickle_atomic`.
+# Purpose: Handle save pickle atomic workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _save_pickle_atomic(path: Path, payload: Any) -> None:
     """Persist one Python payload atomically to avoid torn writes."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -230,12 +260,22 @@ def _save_pickle_atomic(path: Path, payload: Any) -> None:
     _safe_replace(tmp_path, path)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_pickle`.
+# Purpose: Handle load pickle workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_pickle(path: Path) -> Any:
     """Load one staged Python payload from disk."""
     with open(path, 'rb') as f:
         return pickle.load(f)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_cleanup_stage_dir`.
+# Purpose: Handle cleanup stage dir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _cleanup_stage_dir(case_dir: Path, run_id: Optional[str] = None) -> None:
     """Remove staging artifacts for one run to reclaim disk space."""
     metrics_dir = case_dir / 'metrics' / '_staging'
@@ -249,6 +289,11 @@ def _cleanup_stage_dir(case_dir: Path, run_id: Optional[str] = None) -> None:
         logger.warning("Failed to remove staging directory %s (%s).", target, exc)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_metrics_cache_file`.
+# Purpose: Handle get metrics cache file workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_metrics_cache_file(case_name: str, output_dir: str,
                             hemisphere: str, module: str) -> Path:
     """Return module-specific cache path: cases/<case>/metrics/<hms>_<module>_metrics.nc."""
@@ -263,6 +308,11 @@ def _get_metrics_cache_file(case_name: str, output_dir: str,
     return metrics_dir / f'{hms}_{mod}_metrics.nc'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_open_dataset_with_engines`.
+# Purpose: Handle open dataset with engines workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _open_dataset_with_engines(path: Path, group: Optional[str] = None) -> xr.Dataset:
     """Open one NetCDF group with engine fallback."""
     errors: List[str] = []
@@ -287,6 +337,11 @@ def _open_dataset_with_engines(path: Path, group: Optional[str] = None) -> xr.Da
     raise OSError(f'Unable to open cache file/group {path}::{group}. Tried: {" | ".join(errors)}')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_write_dataset_with_engines`.
+# Purpose: Handle write dataset with engines workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_dataset_with_engines(path: Path, ds: xr.Dataset, mode: str = 'a',
                                 group: Optional[str] = None) -> None:
     """Write one NetCDF group with engine fallback."""
@@ -341,6 +396,11 @@ def _write_dataset_with_engines(path: Path, ds: xr.Dataset, mode: str = 'a',
     raise OSError(f'Unable to write cache file/group {path}::{group}. Tried: {" | ".join(errors)}')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_read_cache_root_attrs`.
+# Purpose: Handle read cache root attrs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _read_cache_root_attrs(cache_file: Path) -> Dict[str, Any]:
     """Read root-level cache attributes."""
     if not cache_file.exists():
@@ -355,6 +415,11 @@ def _read_cache_root_attrs(cache_file: Path) -> Dict[str, Any]:
         ds.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_update_cache_root_attrs`.
+# Purpose: Handle update cache root attrs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _update_cache_root_attrs(cache_file: Path, attrs: Dict[str, Any]) -> None:
     """Merge and persist root-level cache attributes."""
     merged = _read_cache_root_attrs(cache_file) if cache_file.exists() else {}
@@ -365,6 +430,11 @@ def _update_cache_root_attrs(cache_file: Path, attrs: Dict[str, Any]) -> None:
     _write_dataset_with_engines(cache_file, root_ds, mode=mode, group=None)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sanitize_group_name`.
+# Purpose: Handle sanitize group name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sanitize_group_name(name: str) -> str:
     """Sanitize one group-name segment for NetCDF hierarchy."""
     text = re.sub(r'\s+', '_', str(name or '').strip())
@@ -373,6 +443,11 @@ def _sanitize_group_name(name: str) -> str:
     return text or 'unnamed'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_derive_label_from_ref_name`.
+# Purpose: Handle derive label from ref name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _derive_label_from_ref_name(ref_entry: str, hemisphere: str) -> str:
     """Derive a short dataset label from one recipe reference filename."""
     stem = Path(str(ref_entry)).stem
@@ -392,6 +467,11 @@ def _derive_label_from_ref_name(ref_entry: str, hemisphere: str) -> str:
     return stem or Path(str(ref_entry)).stem
 
 
+# -----------------------------------------------------------------------------
+# Function: `_obs_label_is_placeholder`.
+# Purpose: Handle obs label is placeholder workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _obs_label_is_placeholder(value: Any, obs_key: str) -> bool:
     """Return True when one obs label is blank or generic placeholder."""
     txt = str(value if value is not None else '').strip().lower()
@@ -412,6 +492,11 @@ def _obs_label_is_placeholder(value: Any, obs_key: str) -> bool:
     return compact in placeholders
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_obs_name_from_recipe`.
+# Purpose: Handle get obs name from recipe workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_obs_name_from_recipe(module_vars: Dict[str, Any], hemisphere: str, obs_key: str) -> Optional[str]:
     """Read one configured obs name from module-scoped obs_names in recipe."""
     raw = module_vars.get('obs_names')
@@ -429,6 +514,11 @@ def _get_obs_name_from_recipe(module_vars: Dict[str, Any], hemisphere: str, obs_
     return txt if txt else None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_reference_labels`.
+# Purpose: Handle get reference labels workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_reference_labels(module_vars: Dict[str, Any], hemisphere: str,
                           suffix: str = '') -> List[str]:
     """Get observation labels for one module/hemisphere.
@@ -489,6 +579,11 @@ def _get_reference_labels(module_vars: Dict[str, Any], hemisphere: str,
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_derive_label_from_model_pattern`.
+# Purpose: Handle derive label from model pattern workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _derive_label_from_model_pattern(pattern: str) -> str:
     """Derive one model label from one recipe model_file pattern."""
     text = str(pattern or '').strip()
@@ -508,6 +603,11 @@ def _derive_label_from_model_pattern(pattern: str) -> str:
     return stem.strip('_') or cleaned
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_recipe_model_labels`.
+# Purpose: Handle get recipe model labels workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_recipe_model_labels(module: str, module_vars: Dict[str, Any], n_models: int) -> List[str]:
     """Get model labels from recipe labels or recipe model_file patterns."""
     if n_models <= 0:
@@ -556,6 +656,11 @@ def _get_recipe_model_labels(module: str, module_vars: Dict[str, Any], n_models:
     return final
 
 
+# -----------------------------------------------------------------------------
+# Function: `_unique_entity_name`.
+# Purpose: Handle unique entity name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _unique_entity_name(preferred: str, fallback: str, used: set) -> str:
     """Return a unique level-3 group name for one cached record."""
     base = _sanitize_group_name(preferred if preferred else fallback)
@@ -568,6 +673,11 @@ def _unique_entity_name(preferred: str, fallback: str, used: set) -> str:
     return candidate
 
 
+# -----------------------------------------------------------------------------
+# Function: `_infer_units`.
+# Purpose: Handle infer units workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _infer_units(var_name: str) -> str:
     """Best-effort unit inference for cached metric variables."""
     key = var_name.lower()
@@ -614,11 +724,21 @@ def _infer_units(var_name: str) -> str:
     return 'unknown'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_units_map`.
+# Purpose: Handle build units map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_units_map(metric_dict: Dict[str, Any]) -> Dict[str, str]:
     """Create a variable->unit map for a metric dictionary."""
     return {k: _infer_units(k) for k in metric_dict.keys()}
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_grid_coords`.
+# Purpose: Handle load grid coords workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_grid_coords(grid_file: Optional[str]) -> Optional[Dict[str, np.ndarray]]:
     """Load optional 2-D latitude/longitude coordinates from one grid file."""
     if not grid_file:
@@ -640,6 +760,11 @@ def _load_grid_coords(grid_file: Optional[str]) -> Optional[Dict[str, np.ndarray
         return None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_write_metric_record`.
+# Purpose: Handle write metric record workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_metric_record(cache_file: Path, group_path: str, metric_dict: Dict[str, Any],
                          grid_coords: Optional[Dict[str, np.ndarray]] = None,
                          start_year: Optional[int] = None,
@@ -668,6 +793,11 @@ def _write_metric_record(cache_file: Path, group_path: str, metric_dict: Dict[st
         check_ds.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_read_metric_record`.
+# Purpose: Handle read metric record workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _read_metric_record(cache_file: Path, group_path: str) -> Dict[str, Any]:
     """Read one metric dictionary from one level-3 group."""
     ds = _open_dataset_with_engines(cache_file, group=group_path)
@@ -677,19 +807,27 @@ def _read_metric_record(cache_file: Path, group_path: str) -> Dict[str, Any]:
         ds.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_write_module_metadata`.
+# Purpose: Handle write module metadata workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_module_metadata(cache_file: Path, meta: Dict[str, Any]) -> None:
     """Store module payload metadata in a dedicated metadata group."""
-    meta_ds = xr.Dataset({
-        'payload_json': xr.DataArray(np.asarray(json.dumps(meta), dtype=str))
-    })
-    meta_ds['payload_json'].attrs.update({
-        'units': 'json',
-        'long_name': 'module_cache_metadata',
+    meta_ds = xr.Dataset()
+    meta_ds.attrs.update({
+        'payload_json': json.dumps(meta),
         'sitool_encoding': 'json',
+        'long_name': 'module_cache_metadata',
     })
     _write_dataset_with_engines(cache_file, meta_ds, mode='a', group=_CACHE_META_GROUP)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_read_module_metadata`.
+# Purpose: Handle read module metadata workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _read_module_metadata(cache_file: Path) -> Optional[Dict[str, Any]]:
     """Read module payload metadata from the metadata group."""
     try:
@@ -697,6 +835,13 @@ def _read_module_metadata(cache_file: Path) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
     try:
+        # New format: store metadata in group attrs (no string data_vars).
+        text = ds.attrs.get('payload_json')
+        if isinstance(text, str) and text.strip():
+            payload = json.loads(text)
+            return payload if isinstance(payload, dict) else None
+
+        # Backward compatibility: legacy payload_json scalar data_var.
         if 'payload_json' not in ds.data_vars:
             return None
         text = str(ds['payload_json'].values.item())
@@ -708,6 +853,11 @@ def _read_module_metadata(cache_file: Path) -> Optional[Dict[str, Any]]:
         ds.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_save_module_cache`.
+# Purpose: Handle save module cache workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _save_module_cache(cache_file: Path, case_name: str, module: str, hemisphere: str,
                        start_year: int, end_year: int,
                        payload_meta: Dict[str, Any],
@@ -728,6 +878,7 @@ def _save_module_cache(cache_file: Path, case_name: str, module: str, hemisphere
     try:
         _update_cache_root_attrs(tmp_cache, {
             'cache_schema_version': CACHE_SCHEMA_VERSION,
+            'cache_semantics_version': CACHE_SEMANTICS_VERSION,
             'case_name': case_name,
             'module': module,
             'hemisphere': hemisphere,
@@ -776,6 +927,11 @@ def _save_module_cache(cache_file: Path, case_name: str, module: str, hemisphere
                 pass
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_module_cache`.
+# Purpose: Handle load module cache workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_module_cache(cache_file: Path, module: str, hemisphere: str) -> Optional[Dict[str, Any]]:
     """Load one module cache payload from module-specific cache groups."""
     if not cache_file.exists():
@@ -785,6 +941,12 @@ def _load_module_cache(cache_file: Path, module: str, hemisphere: str) -> Option
     if attrs.get('cache_schema_version') != CACHE_SCHEMA_VERSION:
         logger.warning("Cache schema mismatch for %s. Expected %s, got %s. Recalculating.",
                        cache_file, CACHE_SCHEMA_VERSION, attrs.get('cache_schema_version'))
+        return None
+    if attrs.get('cache_semantics_version') != CACHE_SEMANTICS_VERSION:
+        logger.warning(
+            "Cache semantics mismatch for %s. Expected %s, got %s. Recalculating.",
+            cache_file, CACHE_SEMANTICS_VERSION, attrs.get('cache_semantics_version'),
+        )
         return None
     if attrs.get('module') not in (None, '', module):
         logger.warning("Cache module mismatch for %s. Expected %s, got %s. Recalculating.",
@@ -814,6 +976,11 @@ def _load_module_cache(cache_file: Path, module: str, hemisphere: str) -> Option
         return None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_write_json_payload_group`.
+# Purpose: Handle write json payload group workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_json_payload_group(cache_file: Path, group: str, payload: Dict[str, Any]) -> None:
     """Write one JSON payload into a dedicated NetCDF group."""
     ds = xr.Dataset({
@@ -827,6 +994,11 @@ def _write_json_payload_group(cache_file: Path, group: str, payload: Dict[str, A
     _write_dataset_with_engines(cache_file, ds, mode='a', group=group)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_unified_metrics_cache`.
+# Purpose: Handle build unified metrics cache workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_unified_metrics_cache(case_name: str, case_dir: Path,
                                  eval_hms: List[str], modules_to_run: List[str]) -> Optional[Path]:
     """Build one unified cache file by serially merging all module cache files.

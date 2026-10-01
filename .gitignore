@@ -1,0 +1,26 @@
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local Python environments
+.venv/
+.venv-*/
+venv/
+
+# SIToolv2 runtime products
+cases/*/Output/
+cases/*/Processed/
+cases/*/metrics/
+cases/*/logs/
+cases/*/_tmp/
+cases/*/*.sitool.lock
+cases/*/cpu_realtime_efficiency_latest.png
+cases/*/stere_*.nc
+cases/*/stere_*.txt
+
+# Platform metadata
+.DS_Store
+Thumbs.db

@@ -19,6 +19,7 @@ Created on 2023/10/31 11:35
 import json
 import logging
 import os
+import re
 import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
@@ -46,6 +47,11 @@ For *_2M_metrics() function, the var1 is recommended to be the observations,
 class SeaIceMetricsBase:
     """Base class for sea ice metrics calculations."""
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, hemisphere: str, metric: str = 'MAE'):
         """Initialize the base metrics calculator.
 
@@ -66,12 +72,22 @@ class SeaIceMetricsBase:
             self.lat = np.array(ds['lat'])
             self.cell_area = np.array(ds['cell_area'])
 
+    # -----------------------------------------------------------------------------
+    # Function: `resolve_key_months`.
+    # Purpose: Handle resolve key months workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def resolve_key_months(hemisphere: str) -> List[int]:
         """Return hemisphere-aware key months for sea-ice extrema diagnostics."""
         h = (hemisphere or '').lower()
         return [3, 9] if h == 'nh' else [2, 9]
 
+    # -----------------------------------------------------------------------------
+    # Function: `month_tag`.
+    # Purpose: Handle month tag workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def month_tag(month: int) -> str:
         """Return lowercase month tag used in file names and dictionary keys."""
@@ -81,11 +97,21 @@ class SeaIceMetricsBase:
         }
         return mapping.get(int(month), f'm{int(month):02d}')
 
+    # -----------------------------------------------------------------------------
+    # Function: `month_label`.
+    # Purpose: Handle month label workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def month_label(month: int) -> str:
         """Return title-case month label used in scalar table headers."""
         return SeaIceMetricsBase.month_tag(month).capitalize()
 
+    # -----------------------------------------------------------------------------
+    # Function: `_normalize_scalar`.
+    # Purpose: Handle normalize scalar workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _normalize_scalar(value):
         """Convert NumPy scalar/bytes objects to native Python scalars."""
@@ -97,6 +123,11 @@ class SeaIceMetricsBase:
             return value.decode('utf-8')
         return value
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_jsonable`.
+    # Purpose: Handle to jsonable workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _to_jsonable(value):
         """Recursively convert metric values to JSON-serializable objects."""
@@ -114,12 +145,22 @@ class SeaIceMetricsBase:
             return value
         return str(value)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_is_linregress_like`.
+    # Purpose: Handle is linregress like workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _is_linregress_like(value) -> bool:
         """Return True when *value* behaves like scipy.stats.linregress output."""
         required = ('slope', 'intercept', 'pvalue')
         return all(hasattr(value, k) for k in required)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_coerce_numeric_array`.
+    # Purpose: Handle coerce numeric array workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _coerce_numeric_array(value) -> Optional[np.ndarray]:
         """Return a numeric ndarray when conversion is safe, else None."""
@@ -139,6 +180,316 @@ class SeaIceMetricsBase:
             return arr
         return None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sanitize_name_token`.
+    # Purpose: Handle sanitize name token workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _sanitize_name_token(token: str) -> str:
+        """Convert arbitrary key tokens to NetCDF-safe name fragments."""
+        out = re.sub(r'[^0-9A-Za-z_]+', '_', str(token)).strip('_')
+        if not out:
+            out = 'item'
+        if out[0].isdigit():
+            out = f'k_{out}'
+        return out
+
+    # -----------------------------------------------------------------------------
+    # Function: `_safe_dim_name`.
+    # Purpose: Handle safe dim name workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _safe_dim_name(var_name: str, suffix: str) -> str:
+        """Build a dimension name from one variable name with a fixed suffix."""
+        return f"{SeaIceMetricsBase._sanitize_name_token(var_name)}_{SeaIceMetricsBase._sanitize_name_token(suffix)}"
+
+    # -----------------------------------------------------------------------------
+    # Function: `_linregress_fields`.
+    # Purpose: Handle linregress fields workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _linregress_fields() -> Tuple[str, ...]:
+        """Canonical field order for linregress-like payload vectors."""
+        return (
+            'slope',
+            'intercept',
+            'rvalue',
+            'pvalue',
+            'stderr',
+            'intercept_stderr',
+        )
+
+    # -----------------------------------------------------------------------------
+    # Function: `_linregress_to_vector`.
+    # Purpose: Handle linregress to vector workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _linregress_to_vector(value) -> np.ndarray:
+        """Convert one linregress-like object to a fixed-order numeric vector."""
+        fields = SeaIceMetricsBase._linregress_fields()
+        return np.asarray(
+            [float(getattr(value, fld, np.nan)) for fld in fields],
+            dtype=np.float64,
+        )
+
+    # -----------------------------------------------------------------------------
+    # Function: `_vector_to_linregress`.
+    # Purpose: Handle vector to linregress workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _vector_to_linregress(raw: object, fields: Tuple[str, ...]) -> SimpleNamespace:
+        """Rebuild a linregress-like namespace from one cached numeric vector."""
+        vec = np.asarray(raw, dtype=float).reshape(-1)
+        payload: Dict[str, float] = {}
+        for idx, fld in enumerate(fields):
+            payload[fld] = float(vec[idx]) if idx < vec.size else np.nan
+        return SimpleNamespace(**payload)
+
+    # -----------------------------------------------------------------------------
+    # Function: `_decode_object_path`.
+    # Purpose: Handle decode object path workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _decode_object_path(attr_value: object) -> Optional[List[str]]:
+        """Decode one object-path attribute into a list of dictionary keys."""
+        if attr_value is None:
+            return None
+        text = str(attr_value).strip()
+        if not text:
+            return None
+        try:
+            payload = json.loads(text)
+            if isinstance(payload, list) and payload:
+                return [str(v) for v in payload]
+        except Exception:
+            return None
+        return None
+
+    # -----------------------------------------------------------------------------
+    # Function: `_assign_path_value`.
+    # Purpose: Handle assign path value workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _assign_path_value(root: Dict[str, object], path: List[str], value: object) -> None:
+        """Assign one value into a nested dictionary path."""
+        if not path:
+            return
+        cur: Dict[str, object] = root
+        for seg in path[:-1]:
+            child = cur.get(seg)
+            if not isinstance(child, dict):
+                child = {}
+                cur[seg] = child
+            cur = child
+        cur[path[-1]] = value
+
+    # -----------------------------------------------------------------------------
+    # Function: `_numeric_to_dataarray`.
+    # Purpose: Handle numeric to dataarray workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    @staticmethod
+    def _numeric_to_dataarray(var_name: str,
+                              logical_key: str,
+                              arr: np.ndarray,
+                              units: str,
+                              long_name: str,
+                              coords: Dict[str, xr.DataArray],
+                              metric_context: Dict[str, object],
+                              start_year: Optional[int],
+                              end_year: Optional[int],
+                              lon2d: Optional[np.ndarray] = None,
+                              lat2d: Optional[np.ndarray] = None) -> xr.DataArray:
+        """Serialize one numeric array/scalar into a CF-oriented DataArray."""
+        k_lower = str(logical_key).lower()
+        is_siconc_fraction_like = (
+            arr.dtype.kind in ('i', 'u', 'f')
+            and units == '%'
+            and ('siconc_clim' in k_lower or k_lower == 'siconc')
+            and all(tok not in k_lower for tok in ('ano', 'tr', 'std', 'diff'))
+        )
+        if is_siconc_fraction_like:
+            finite = np.asarray(arr, dtype=float)
+            if np.isfinite(finite).any() and np.nanmax(np.abs(finite)) <= 1.5:
+                arr = finite * 100.0
+
+        is_clim = SeaIceMetricsBase._is_climatology_key(logical_key)
+        if arr.ndim >= 1 and is_clim:
+            arr = SeaIceMetricsBase._normalize_climatology_array(
+                logical_key, arr, metric_context, start_year=start_year, end_year=end_year
+            )
+
+        if arr.ndim == 0:
+            da = xr.DataArray(SeaIceMetricsBase._normalize_scalar(arr))
+            attrs = {
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            }
+            fv = SeaIceMetricsBase._fill_value_for_array(np.asarray(arr))
+            if fv is not None:
+                attrs['_FillValue'] = fv
+            da.attrs.update(attrs)
+            return da
+
+        if arr.ndim == 1 and k_lower in {'uni_mon', 'key_months'}:
+            month_vals = SeaIceMetricsBase._sanitize_month_index_vector(
+                arr, unique=(k_lower == 'uni_mon')
+            )
+            dim_name = SeaIceMetricsBase._safe_dim_name(var_name, 'index')
+            da = xr.DataArray(month_vals.astype(np.int32, copy=False), dims=(dim_name,))
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            return da
+
+        if arr.ndim == 1 and is_clim and int(arr.shape[0]) == 12:
+            if 'month' not in coords:
+                coords['month'] = SeaIceMetricsBase._month_coord()
+            da = xr.DataArray(arr, dims=('month',), coords={'month': coords['month']})
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        if arr.ndim == 1:
+            ntime = int(arr.shape[0])
+            if 'time' not in coords or int(coords['time'].shape[0]) != ntime:
+                coords['time'] = SeaIceMetricsBase._time_coord(
+                    ntime, start_year=start_year, end_year=end_year, key=logical_key
+                )
+            da = xr.DataArray(arr, dims=('time',), coords={'time': coords['time']})
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        if arr.ndim == 2 and k_lower in {'time_keys', 'yearmon_list'}:
+            ntime, ncomp = int(arr.shape[0]), int(arr.shape[1])
+            if 'time' not in coords or int(coords['time'].shape[0]) != ntime:
+                coords['time'] = SeaIceMetricsBase._time_coord(
+                    ntime, start_year=start_year, end_year=end_year, key=logical_key
+                )
+            comp_dim = SeaIceMetricsBase._safe_dim_name(var_name, 'component')
+            comp_coord = xr.DataArray(np.arange(ncomp, dtype=np.int16), dims=(comp_dim,))
+            comp_coord.attrs.update({
+                'long_name': f'{k_lower}_component_index',
+                'units': '1',
+            })
+            da = xr.DataArray(
+                arr,
+                dims=('time', comp_dim),
+                coords={'time': coords['time'], comp_dim: comp_coord},
+            )
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        if arr.ndim == 2:
+            ny, nx = int(arr.shape[0]), int(arr.shape[1])
+            if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
+                coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
+            da_coords: Dict[str, xr.DataArray] = {'y': coords['y'], 'x': coords['x']}
+            if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
+                da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
+                da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
+            da = xr.DataArray(arr, dims=('y', 'x'), coords=da_coords)
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        if arr.ndim == 3 and is_clim and int(arr.shape[0]) == 12:
+            nmon, ny, nx = int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])
+            if 'month' not in coords or int(coords['month'].shape[0]) != nmon:
+                coords['month'] = SeaIceMetricsBase._month_coord()
+            if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
+                coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
+            da_coords = {'month': coords['month'], 'y': coords['y'], 'x': coords['x']}
+            if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
+                da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
+                da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
+            da = xr.DataArray(arr, dims=('month', 'y', 'x'), coords=da_coords)
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        if arr.ndim == 3:
+            ntime, ny, nx = int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])
+            if 'time' not in coords or int(coords['time'].shape[0]) != ntime:
+                coords['time'] = SeaIceMetricsBase._time_coord(
+                    ntime, start_year=start_year, end_year=end_year, key=logical_key
+                )
+            if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
+                coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
+            da_coords = {'time': coords['time'], 'y': coords['y'], 'x': coords['x']}
+            if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
+                da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
+                da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
+            da = xr.DataArray(arr, dims=('time', 'y', 'x'), coords=da_coords)
+            da.attrs.update({
+                'units': units,
+                'long_name': long_name,
+                'sitool_encoding': 'native',
+            })
+            fv = SeaIceMetricsBase._fill_value_for_array(arr)
+            if fv is not None:
+                da.attrs['_FillValue'] = fv
+            return da
+
+        dims = tuple(SeaIceMetricsBase._safe_dim_name(var_name, f'dim{i}') for i in range(arr.ndim))
+        da = xr.DataArray(arr, dims=dims)
+        da.attrs.update({
+            'units': units,
+            'long_name': long_name,
+            'sitool_encoding': 'native',
+        })
+        fv = SeaIceMetricsBase._fill_value_for_array(arr)
+        if fv is not None:
+            da.attrs['_FillValue'] = fv
+        return da
+
+    # -----------------------------------------------------------------------------
+    # Function: `_fill_value_for_array`.
+    # Purpose: Handle fill value for array workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _fill_value_for_array(arr: np.ndarray):
         """Return a CF-style fill value matching one array dtype."""
@@ -150,6 +501,11 @@ class SeaIceMetricsBase:
             return 255
         return None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_month_coord`.
+    # Purpose: Handle month coord workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _month_coord() -> xr.DataArray:
         """Create month coordinate [1..12] for climatology variables."""
@@ -157,6 +513,11 @@ class SeaIceMetricsBase:
         da.attrs.update({'long_name': 'calendar_month', 'units': '1'})
         return da
 
+    # -----------------------------------------------------------------------------
+    # Function: `_infer_key_month`.
+    # Purpose: Handle infer key month workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _infer_key_month(key: str) -> Optional[int]:
         """Infer a fixed month from key suffix like *_mar, *_sep."""
@@ -170,6 +531,11 @@ class SeaIceMetricsBase:
                 return month
         return None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_time_coord`.
+    # Purpose: Handle time coord workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _time_coord(length: int, start_year: Optional[int] = None,
                     end_year: Optional[int] = None,
@@ -204,6 +570,11 @@ class SeaIceMetricsBase:
         })
         return da
 
+    # -----------------------------------------------------------------------------
+    # Function: `_xy_coords`.
+    # Purpose: Handle xy coords workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _xy_coords(ny: int, nx: int) -> Dict[str, xr.DataArray]:
         """Create index-based x/y coordinates."""
@@ -213,12 +584,22 @@ class SeaIceMetricsBase:
         x.attrs.update({'long_name': 'x_index', 'units': '1'})
         return {'y': y, 'x': x}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_is_climatology_key`.
+    # Purpose: Handle is climatology key workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _is_climatology_key(key: str) -> bool:
         """Return True for climatology-style metric keys."""
         k = str(key or '').lower()
         return 'clim' in k
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sanitize_month_index_vector`.
+    # Purpose: Handle sanitize month index vector workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _sanitize_month_index_vector(values: object, *, unique: bool = False) -> np.ndarray:
         """Normalize month-index vectors to finite integers in [1, 12]."""
@@ -247,6 +628,11 @@ class SeaIceMetricsBase:
             return np.asarray(out, dtype=np.int32)
         return months.astype(np.int32, copy=False)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_normalize_climatology_array`.
+    # Purpose: Handle normalize climatology array workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _normalize_climatology_array(key: str, arr: np.ndarray,
                                      metric_dict: Dict[str, object],
@@ -310,6 +696,11 @@ class SeaIceMetricsBase:
 
         return arr
 
+    # -----------------------------------------------------------------------------
+    # Function: `to_xarray`.
+    # Purpose: Handle to xarray workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def to_xarray(metric_dict: Dict[str, object],
                   units_map: Optional[Dict[str, str]] = None,
@@ -331,6 +722,7 @@ class SeaIceMetricsBase:
         long_name_map = long_name_map or {}
         ds_vars: Dict[str, xr.DataArray] = {}
         coords: Dict[str, xr.DataArray] = {}
+        used_var_names: set = set()
         lon2d = None
         lat2d = None
         if isinstance(grid_coords, dict):
@@ -341,201 +733,182 @@ class SeaIceMetricsBase:
             elif lon2d.shape != lat2d.shape or lon2d.ndim != 2:
                 lon2d = lat2d = None
 
+        entries: List[Dict[str, object]] = []
+
+        # -----------------------------------------------------------------------------
+        # Function: `_append_entry`.
+        # Purpose: Handle append entry workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
+        def _append_entry(path: List[str],
+                          kind: str,
+                          value_obj: object,
+                          units_obj: str,
+                          long_name_obj: str,
+                          context_obj: Dict[str, object]) -> None:
+            entries.append({
+                'path': list(path),
+                'logical_key': str(path[-1]) if path else '',
+                'kind': kind,
+                'value': value_obj,
+                'units': units_obj,
+                'long_name': long_name_obj,
+                'context': context_obj,
+            })
+
+        # -----------------------------------------------------------------------------
+        # Function: `_walk_value`.
+        # Purpose: Handle walk value workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
+        def _walk_value(top_key: str,
+                        path: List[str],
+                        value_obj: object,
+                        units_obj: str,
+                        long_name_obj: str,
+                        context_obj: Dict[str, object]) -> None:
+            if value_obj is None:
+                return
+
+            if isinstance(value_obj, dict):
+                if not value_obj:
+                    _append_entry(path, 'empty_dict', {}, units_obj, long_name_obj, context_obj)
+                    return
+                for sub_key, sub_val in value_obj.items():
+                    sub_name = str(sub_key)
+                    _walk_value(
+                        top_key=top_key,
+                        path=path + [sub_name],
+                        value_obj=sub_val,
+                        units_obj=units_map.get(sub_name, units_obj),
+                        long_name_obj=f'{long_name_obj}.{sub_name}',
+                        context_obj=value_obj,
+                    )
+                return
+
+            if SeaIceMetricsBase._is_linregress_like(value_obj):
+                _append_entry(path, 'linregress', value_obj, units_obj, long_name_obj, context_obj)
+                return
+
+            arr_obj = SeaIceMetricsBase._coerce_numeric_array(value_obj)
+            if arr_obj is not None:
+                _append_entry(path, 'numeric', arr_obj, units_obj, long_name_obj, context_obj)
+                return
+
+            if np.isscalar(value_obj):
+                scalar_obj = SeaIceMetricsBase._normalize_scalar(value_obj)
+                if isinstance(scalar_obj, (str, bytes, np.bytes_)):
+                    _append_entry(path, 'string_code', str(scalar_obj), units_obj, long_name_obj, context_obj)
+                else:
+                    _append_entry(path, 'numeric', np.asarray(scalar_obj), units_obj, long_name_obj, context_obj)
+                return
+
+            if isinstance(value_obj, (list, tuple)):
+                arr_obj = SeaIceMetricsBase._coerce_numeric_array(value_obj)
+                if arr_obj is not None:
+                    _append_entry(path, 'numeric', arr_obj, units_obj, long_name_obj, context_obj)
+                    return
+                payload = json.dumps(SeaIceMetricsBase._to_jsonable(value_obj), ensure_ascii=False)
+                _append_entry(path, 'string_json', payload, units_obj, long_name_obj, context_obj)
+                return
+
+            _append_entry(path, 'string_code', str(value_obj), units_obj, long_name_obj, context_obj)
+
         for key, value in metric_dict.items():
             if value is None:
                 continue
+            _walk_value(
+                top_key=str(key),
+                path=[str(key)],
+                value_obj=value,
+                units_obj=units_map.get(str(key), 'unknown'),
+                long_name_obj=long_name_map.get(str(key), str(key)),
+                context_obj=metric_dict,
+            )
 
-            units = units_map.get(key, 'unknown')
-            long_name = long_name_map.get(key, key)
+        # -----------------------------------------------------------------------------
+        # Function: `_make_var_name`.
+        # Purpose: Handle make var name workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
+        def _make_var_name(path: List[str]) -> str:
+            if len(path) == 1:
+                base = str(path[0])
+            else:
+                toks = [SeaIceMetricsBase._sanitize_name_token(v) for v in path]
+                base = f"obj__{'__'.join(toks)}"
+            name = base
+            idx = 2
+            while name in used_var_names:
+                name = f'{base}_{idx}'
+                idx += 1
+            used_var_names.add(name)
+            return name
 
-            arr = SeaIceMetricsBase._coerce_numeric_array(value)
-            if arr is not None:
-                k_lower = key.lower()
-                is_siconc_fraction_like = (
-                    arr.dtype.kind in ('i', 'u', 'f')
-                    and units == '%'
-                    and ('siconc_clim' in k_lower or k_lower == 'siconc')
-                    and all(tok not in k_lower for tok in ('ano', 'tr', 'std', 'diff'))
-                )
-                if is_siconc_fraction_like:
-                    finite = np.asarray(arr, dtype=float)
-                    if np.isfinite(finite).any() and np.nanmax(np.abs(finite)) <= 1.5:
-                        arr = finite * 100.0
-
-                is_clim = SeaIceMetricsBase._is_climatology_key(key)
-                if arr.ndim >= 1 and is_clim:
-                    arr = SeaIceMetricsBase._normalize_climatology_array(
-                        key, arr, metric_dict, start_year=start_year, end_year=end_year
-                    )
-
-                if arr.ndim == 0:
-                    da = xr.DataArray(SeaIceMetricsBase._normalize_scalar(arr))
-                    attrs = {
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    }
-                    fv = SeaIceMetricsBase._fill_value_for_array(np.asarray(arr))
-                    if fv is not None:
-                        attrs['_FillValue'] = fv
-                    da.attrs.update(attrs)
-                    ds_vars[key] = da
-                elif arr.ndim == 1 and k_lower in {'uni_mon', 'key_months'}:
-                    month_vals = SeaIceMetricsBase._sanitize_month_index_vector(
-                        arr, unique=(k_lower == 'uni_mon')
-                    )
-                    dim_name = f'{k_lower}_index'
-                    da = xr.DataArray(month_vals.astype(np.int32, copy=False), dims=(dim_name,))
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    ds_vars[key] = da
-                elif arr.ndim == 1 and is_clim and int(arr.shape[0]) == 12:
-                    if 'month' not in coords:
-                        coords['month'] = SeaIceMetricsBase._month_coord()
-                    da = xr.DataArray(arr, dims=('month',), coords={'month': coords['month']})
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
-                elif arr.ndim == 1:
-                    ntime = int(arr.shape[0])
-                    if 'time' not in coords or int(coords['time'].shape[0]) != ntime:
-                        coords['time'] = SeaIceMetricsBase._time_coord(
-                            ntime, start_year=start_year, end_year=end_year, key=key
-                        )
-                    da = xr.DataArray(arr, dims=('time',), coords={'time': coords['time']})
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
-                elif arr.ndim == 2:
-                    ny, nx = int(arr.shape[0]), int(arr.shape[1])
-                    if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
-                        coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
-                    da_coords: Dict[str, xr.DataArray] = {'y': coords['y'], 'x': coords['x']}
-                    if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
-                        da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
-                        da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
-                    da = xr.DataArray(arr, dims=('y', 'x'), coords=da_coords)
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
-                elif arr.ndim == 3 and is_clim and int(arr.shape[0]) == 12:
-                    nmon, ny, nx = int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])
-                    if 'month' not in coords or int(coords['month'].shape[0]) != nmon:
-                        coords['month'] = SeaIceMetricsBase._month_coord()
-                    if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
-                        coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
-                    da_coords = {'month': coords['month'], 'y': coords['y'], 'x': coords['x']}
-                    if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
-                        da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
-                        da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
-                    da = xr.DataArray(arr, dims=('month', 'y', 'x'), coords=da_coords)
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
-                elif arr.ndim == 3:
-                    ntime, ny, nx = int(arr.shape[0]), int(arr.shape[1]), int(arr.shape[2])
-                    if 'time' not in coords or int(coords['time'].shape[0]) != ntime:
-                        coords['time'] = SeaIceMetricsBase._time_coord(
-                            ntime, start_year=start_year, end_year=end_year, key=key
-                        )
-                    if 'y' not in coords or int(coords['y'].shape[0]) != ny or int(coords['x'].shape[0]) != nx:
-                        coords.update(SeaIceMetricsBase._xy_coords(ny, nx))
-                    da_coords = {'time': coords['time'], 'y': coords['y'], 'x': coords['x']}
-                    if lon2d is not None and lat2d is not None and lon2d.shape == (ny, nx):
-                        da_coords['lon'] = xr.DataArray(lon2d, dims=('y', 'x'))
-                        da_coords['lat'] = xr.DataArray(lat2d, dims=('y', 'x'))
-                    da = xr.DataArray(arr, dims=('time', 'y', 'x'), coords=da_coords)
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
-                else:
-                    dims = tuple(f'{key}_dim{i}' for i in range(arr.ndim))
-                    da = xr.DataArray(arr, dims=dims)
-                    da.attrs.update({
-                        'units': units,
-                        'long_name': long_name,
-                        'sitool_encoding': 'native',
-                    })
-                    fv = SeaIceMetricsBase._fill_value_for_array(arr)
-                    if fv is not None:
-                        da.attrs['_FillValue'] = fv
-                    ds_vars[key] = da
+        for ent in entries:
+            path = ent['path']
+            if not isinstance(path, list) or not path:
                 continue
+            var_name = _make_var_name(path)
+            logical_key = str(ent.get('logical_key', path[-1]))
+            units = str(ent.get('units', 'unknown'))
+            long_name = str(ent.get('long_name', logical_key))
+            kind = str(ent.get('kind', 'numeric'))
+            context = ent.get('context')
+            if not isinstance(context, dict):
+                context = metric_dict
+            object_path_attr = json.dumps(path, ensure_ascii=False) if len(path) > 1 else None
 
-            if np.isscalar(value):
-                scalar_value = SeaIceMetricsBase._normalize_scalar(value)
-                da = xr.DataArray(scalar_value)
-                attrs = {
+            if kind == 'numeric':
+                arr = np.asarray(ent.get('value'))
+                da = SeaIceMetricsBase._numeric_to_dataarray(
+                    var_name=var_name,
+                    logical_key=logical_key,
+                    arr=arr,
+                    units=units,
+                    long_name=long_name,
+                    coords=coords,
+                    metric_context=context,
+                    start_year=start_year,
+                    end_year=end_year,
+                    lon2d=lon2d,
+                    lat2d=lat2d,
+                )
+            elif kind == 'linregress':
+                fields = SeaIceMetricsBase._linregress_fields()
+                vec = SeaIceMetricsBase._linregress_to_vector(ent.get('value'))
+                dim_name = SeaIceMetricsBase._safe_dim_name(var_name, 'linregress_component')
+                dim_coord = xr.DataArray(np.arange(vec.size, dtype=np.int16), dims=(dim_name,))
+                dim_coord.attrs.update({'long_name': 'linregress_component_index', 'units': '1'})
+                da = xr.DataArray(vec, dims=(dim_name,), coords={dim_name: dim_coord})
+                da.attrs.update({
                     'units': units,
                     'long_name': long_name,
-                    'sitool_encoding': 'native',
-                }
-                fv = SeaIceMetricsBase._fill_value_for_array(np.asarray(scalar_value))
-                if fv is not None:
-                    attrs['_FillValue'] = fv
-                da.attrs.update(attrs)
-                ds_vars[key] = da
-                continue
-
-            if SeaIceMetricsBase._is_linregress_like(value):
-                payload = {
-                    'type': 'linregress',
-                    'value': {
-                        'slope': float(getattr(value, 'slope', np.nan)),
-                        'intercept': float(getattr(value, 'intercept', np.nan)),
-                        'rvalue': float(getattr(value, 'rvalue', np.nan)),
-                        'pvalue': float(getattr(value, 'pvalue', np.nan)),
-                        'stderr': float(getattr(value, 'stderr', np.nan)),
-                        'intercept_stderr': float(getattr(value, 'intercept_stderr', np.nan)),
-                    },
-                }
-            elif isinstance(value, dict):
-                payload = {'type': 'dict', 'value': SeaIceMetricsBase._to_jsonable(value)}
-            elif isinstance(value, (list, tuple)):
-                payload = {'type': 'sequence', 'value': SeaIceMetricsBase._to_jsonable(value)}
+                    'sitool_encoding': 'linregress_vector',
+                    'sitool_linregress_fields': json.dumps(list(fields)),
+                })
+            elif kind == 'empty_dict':
+                da = xr.DataArray(np.asarray(1, dtype=np.int8))
+                da.attrs.update({
+                    'units': units,
+                    'long_name': long_name,
+                    'sitool_encoding': 'object_empty_dict',
+                })
             else:
-                payload = {'type': 'fallback', 'value': SeaIceMetricsBase._to_jsonable(value)}
+                payload_text = str(ent.get('value', ''))
+                da = xr.DataArray(np.asarray(0, dtype=np.int32))
+                da.attrs.update({
+                    'units': units,
+                    'long_name': long_name,
+                    'sitool_encoding': 'string_code',
+                    'sitool_string_values': json.dumps([payload_text], ensure_ascii=False),
+                })
+                if kind == 'string_json':
+                    da.attrs['sitool_string_json'] = '1'
 
-            da = xr.DataArray(np.asarray(json.dumps(payload), dtype=str))
-            da.attrs.update({
-                'units': units,
-                'long_name': long_name,
-                'sitool_encoding': 'json',
-            })
-            ds_vars[key] = da
+            if object_path_attr is not None:
+                da.attrs['sitool_object_path'] = object_path_attr
+            ds_vars[var_name] = da
 
         ds = xr.Dataset(ds_vars)
         if 'time' in ds.coords:
@@ -559,6 +932,11 @@ class SeaIceMetricsBase:
             })
         return ds
 
+    # -----------------------------------------------------------------------------
+    # Function: `save_to_nc`.
+    # Purpose: Handle save to nc workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def save_to_nc(output_file: str,
                    metric_dict: Dict[str, object],
@@ -605,6 +983,11 @@ class SeaIceMetricsBase:
         if out_dir:
             os.makedirs(out_dir, exist_ok=True)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_retryable`.
+        # Purpose: Handle retryable workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _retryable(exc: Exception) -> bool:
             text = str(exc).lower()
             if isinstance(exc, (PermissionError, BlockingIOError)):
@@ -654,6 +1037,11 @@ class SeaIceMetricsBase:
             f'Tried: {" | ".join(errors)}'
         )
 
+    # -----------------------------------------------------------------------------
+    # Function: `from_xarray`.
+    # Purpose: Handle from xarray workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def from_xarray(ds: xr.Dataset) -> Dict[str, object]:
         """Rebuild a metric dictionary from cached xarray datasets."""
@@ -685,34 +1073,99 @@ class SeaIceMetricsBase:
             else:
                 raw = values
 
+            decoded_value: object
             if encoding == 'json':
                 text = SeaIceMetricsBase._normalize_scalar(raw)
                 try:
                     payload = json.loads(text)
                 except Exception:
-                    metric[key] = text
-                    continue
-
-                p_type = payload.get('type')
-                p_value = payload.get('value')
-                if p_type == 'linregress' and isinstance(p_value, dict):
-                    metric[key] = SimpleNamespace(**p_value)
+                    decoded_value = text
                 else:
-                    metric[key] = p_value
+                    p_type = payload.get('type')
+                    p_value = payload.get('value')
+                    if p_type == 'linregress' and isinstance(p_value, dict):
+                        decoded_value = SimpleNamespace(**p_value)
+                    else:
+                        decoded_value = p_value
+            elif encoding == 'linregress_vector':
+                fields_attr = da.attrs.get('sitool_linregress_fields')
+                fields = SeaIceMetricsBase._linregress_fields()
+                if fields_attr is not None:
+                    try:
+                        parsed = json.loads(str(fields_attr))
+                        if isinstance(parsed, list) and parsed:
+                            fields = tuple(str(v) for v in parsed)
+                    except Exception:
+                        pass
+                decoded_value = SeaIceMetricsBase._vector_to_linregress(raw, fields)
+            elif encoding == 'string_code':
+                labels_attr = da.attrs.get('sitool_string_values', '[]')
+                labels: List[str] = []
+                try:
+                    parsed = json.loads(str(labels_attr))
+                    if isinstance(parsed, list):
+                        labels = [str(v) for v in parsed]
+                except Exception:
+                    labels = []
+                idx = 0
+                try:
+                    idx = int(np.asarray(raw).reshape(()))
+                except Exception:
+                    idx = 0
+                if 0 <= idx < len(labels):
+                    decoded_value = labels[idx]
+                elif labels:
+                    decoded_value = labels[0]
+                else:
+                    decoded_value = ''
+                if str(da.attrs.get('sitool_string_json', '')).strip() == '1':
+                    try:
+                        decoded_value = json.loads(str(decoded_value))
+                    except Exception:
+                        pass
+            elif encoding == 'object_empty_dict':
+                decoded_value = {}
+            elif encoding == 'object_empty_list':
+                decoded_value = []
             else:
+                semantic_key = str(key)
+                path = SeaIceMetricsBase._decode_object_path(da.attrs.get('sitool_object_path'))
+                if path:
+                    semantic_key = str(path[-1])
                 if isinstance(raw, np.ndarray) and raw.ndim > 0:
-                    k_lower = str(key).lower()
+                    k_lower = semantic_key.lower()
                     if k_lower in {'uni_mon', 'key_months'}:
-                        metric[key] = SeaIceMetricsBase._sanitize_month_index_vector(
+                        decoded_value = SeaIceMetricsBase._sanitize_month_index_vector(
                             raw, unique=(k_lower == 'uni_mon')
                         )
+                    elif k_lower in {'time_keys', 'yearmon_list'} and raw.ndim == 2:
+                        out_rows: List[Tuple[int, ...]] = []
+                        arr_rows = np.asarray(raw)
+                        for row in arr_rows:
+                            try:
+                                vals = tuple(int(v) for v in np.asarray(row).reshape(-1).tolist())
+                            except Exception:
+                                continue
+                            out_rows.append(vals)
+                        decoded_value = out_rows
                     else:
-                        metric[key] = np.asarray(raw)
+                        decoded_value = np.asarray(raw)
                 else:
-                    metric[key] = SeaIceMetricsBase._normalize_scalar(raw)
+                    decoded_value = SeaIceMetricsBase._normalize_scalar(raw)
+
+            object_path = SeaIceMetricsBase._decode_object_path(da.attrs.get('sitool_object_path'))
+            if object_path:
+                SeaIceMetricsBase._assign_path_value(metric, object_path, decoded_value)
+            else:
+                metric[key] = decoded_value
 
         return metric
 
+    # -----------------------------------------------------------------------------
+    # Function: `valid_data_mask`.
+    # Purpose: Handle valid data mask workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def valid_data_mask(data: np.ndarray, positive_only: bool = False) -> np.ndarray:
         """Return a boolean valid-data mask for scalar fields."""
@@ -721,6 +1174,11 @@ class SeaIceMetricsBase:
             mask &= (data > 0)
         return mask
 
+    # -----------------------------------------------------------------------------
+    # Function: `vector_valid_data_mask`.
+    # Purpose: Handle vector valid data mask workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def vector_valid_data_mask(u: np.ndarray, v: np.ndarray, positive_speed: bool = False) -> np.ndarray:
         """Return a boolean valid-data mask for vector fields."""

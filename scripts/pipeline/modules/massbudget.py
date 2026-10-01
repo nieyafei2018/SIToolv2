@@ -9,6 +9,7 @@ globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 import glob
 import re
 
+from scripts.plot_figs.core import _group_style, _is_group_label
 from scripts.pipeline.modules.common import (
     _apply_plot_runtime_options,
     _check_outputs_exist,
@@ -50,6 +51,11 @@ _MASS_BUDGET_SPECS: Dict[str, Dict[str, Any]] = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_mass_budget_spec`.
+# Purpose: Handle mass budget spec workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _mass_budget_spec(module: str) -> Dict[str, Any]:
     spec = _MASS_BUDGET_SPECS.get(str(module))
     if spec is None:
@@ -57,6 +63,11 @@ def _mass_budget_spec(module: str) -> Dict[str, Any]:
     return spec
 
 
+# -----------------------------------------------------------------------------
+# Function: `_ordered_available_terms`.
+# Purpose: Handle ordered available terms workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _ordered_available_terms(module: str, term_names: List[str]) -> List[str]:
     """Return module terms in canonical order with unknown terms appended."""
     spec = _mass_budget_spec(module)
@@ -68,6 +79,11 @@ def _ordered_available_terms(module: str, term_names: List[str]) -> List[str]:
     return ordered + extras
 
 
+# -----------------------------------------------------------------------------
+# Function: `_infer_terms_from_seas_file`.
+# Purpose: Handle infer terms from seas file workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _infer_terms_from_seas_file(module: str, seas_file: str) -> List[str]:
     """Infer available term names from one seasonal climatology file."""
     if not seas_file or (not Path(seas_file).exists()):
@@ -79,6 +95,11 @@ def _infer_terms_from_seas_file(module: str, seas_file: str) -> List[str]:
         return []
 
 
+# -----------------------------------------------------------------------------
+# Function: `_season_months`.
+# Purpose: Handle season months workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _season_months(hemisphere: str) -> Dict[str, List[int]]:
     if str(hemisphere).lower() == 'sh':
         return {
@@ -95,14 +116,29 @@ def _season_months(hemisphere: str) -> Dict[str, List[int]]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_fmt_total`.
+# Purpose: Handle fmt total workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _fmt_total(v: float) -> str:
     return f"{v:.3f}" if np.isfinite(v) else 'NaN'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_fmt_pct`.
+# Purpose: Handle fmt pct workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _fmt_pct(v: float) -> str:
     return f"{v:.1f}%" if np.isfinite(v) else 'NaN'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_season_display_label`.
+# Purpose: Handle season display label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _season_display_label(hemisphere: str, season: str) -> str:
     base = str(season)
     if str(hemisphere).lower() == 'sh':
@@ -122,6 +158,11 @@ def _season_display_label(hemisphere: str, season: str) -> str:
     return mapping.get(base, base)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_nice_symmetric_range`.
+# Purpose: Handle nice symmetric range workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _nice_symmetric_range(vmax_raw: float) -> float:
     vmax = float(np.nan_to_num(vmax_raw, nan=0.0))
     vmax = abs(vmax)
@@ -140,6 +181,11 @@ def _nice_symmetric_range(vmax_raw: float) -> float:
     return float(nice * exponent)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_auto_budget_map_range`.
+# Purpose: Handle auto budget map range workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _auto_budget_map_range(seas_files: List[str]) -> Tuple[float, float, float]:
     vals = []
     for path in seas_files:
@@ -170,6 +216,11 @@ def _auto_budget_map_range(seas_files: List[str]) -> Tuple[float, float, float]:
     return float(vmin), float(vmax), float(cbtick_bin)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_find_lon_lat_names`.
+# Purpose: Handle find lon lat names workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _find_lon_lat_names(ds: xr.Dataset) -> Tuple[str, str]:
     lon_candidates = ['lon', 'longitude', 'nav_lon', 'glamt', 'xlon']
     lat_candidates = ['lat', 'latitude', 'nav_lat', 'gphit', 'xlat']
@@ -196,6 +247,11 @@ def _find_lon_lat_names(ds: xr.Dataset) -> Tuple[str, str]:
     return lon_name, lat_name
 
 
+# -----------------------------------------------------------------------------
+# Function: `_estimate_area_rectilinear`.
+# Purpose: Handle estimate area rectilinear workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _estimate_area_rectilinear(lon_1d: np.ndarray, lat_1d: np.ndarray) -> np.ndarray:
     lon = np.asarray(lon_1d, dtype=float).ravel()
     lat = np.asarray(lat_1d, dtype=float).ravel()
@@ -221,6 +277,11 @@ def _estimate_area_rectilinear(lon_1d: np.ndarray, lat_1d: np.ndarray) -> np.nda
     return area
 
 
+# -----------------------------------------------------------------------------
+# Function: `_estimate_area_curvilinear`.
+# Purpose: Handle estimate area curvilinear workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _estimate_area_curvilinear(lon_2d: np.ndarray, lat_2d: np.ndarray) -> np.ndarray:
     lon = np.asarray(lon_2d, dtype=float)
     lat = np.asarray(lat_2d, dtype=float)
@@ -237,6 +298,11 @@ def _estimate_area_curvilinear(lon_2d: np.ndarray, lat_2d: np.ndarray) -> np.nda
     return area
 
 
+# -----------------------------------------------------------------------------
+# Function: `_estimate_area_from_dataset`.
+# Purpose: Handle estimate area from dataset workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _estimate_area_from_dataset(ds_ref: xr.Dataset, var_name: str) -> np.ndarray:
     ref_da = ds_ref[var_name]
     spatial_dims = ref_da.dims[-2:]
@@ -293,6 +359,11 @@ def _estimate_area_from_dataset(ds_ref: xr.Dataset, var_name: str) -> np.ndarray
     return np.asarray(area, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_read_area_array`.
+# Purpose: Handle read area array workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _read_area_array(area_file: str, target_shape: Tuple[int, int]) -> np.ndarray:
     with xr.open_dataset(area_file) as ds_area:
         area_var = None
@@ -328,6 +399,11 @@ def _read_area_array(area_file: str, target_shape: Tuple[int, int]) -> np.ndarra
         return area_arr
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_source_area_file`.
+# Purpose: Handle build source area file workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_source_area_file(input_file: str, var_name: str,
                             area_file: Optional[str], output_file: str) -> str:
     with xr.open_dataset(input_file) as ds_ref:
@@ -372,6 +448,11 @@ def _build_source_area_file(input_file: str, var_name: str,
         return area_source
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_target_area_file`.
+# Purpose: Handle build target area file workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_target_area_file(grid_nc_file: str, output_file: str) -> None:
     with xr.open_dataset(grid_nc_file) as ds_grid:
         if 'cell_area' not in ds_grid.variables:
@@ -394,6 +475,11 @@ def _build_target_area_file(grid_nc_file: str, output_file: str) -> None:
         utils.write_netcdf_compressed(ds_tgt, output_file)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_conservative_remap_with_area`.
+# Purpose: Handle conservative remap with area workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _conservative_remap_with_area(preprocessor: PP.DataPreprocessor,
                                   input_file: str,
                                   var_name: str,
@@ -465,6 +551,11 @@ _SEGMENT_COPY_RE = re.compile(r"\s+\(\d+\)\.nc$")
 _SEGMENT_DATE_RE = re.compile(r"_(\d{6,8}-\d{6,8})(?:\s+\(\d+\))?\.nc$")
 
 
+# -----------------------------------------------------------------------------
+# Function: `_segment_group_key`.
+# Purpose: Handle segment group key workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _segment_group_key(path: str) -> str:
     """Build a stable key for one time-split segment file."""
     name = os.path.basename(path)
@@ -474,11 +565,21 @@ def _segment_group_key(path: str) -> str:
     return name
 
 
+# -----------------------------------------------------------------------------
+# Function: `_is_copy_segment_name`.
+# Purpose: Handle is copy segment name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_copy_segment_name(path: str) -> bool:
     """Return True for duplicate copy names like ``foo (1).nc``."""
     return _SEGMENT_COPY_RE.search(os.path.basename(path)) is not None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_dedupe_segment_candidates`.
+# Purpose: Handle dedupe segment candidates workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _dedupe_segment_candidates(paths: List[str], *, context: str) -> List[str]:
     """Remove duplicated segment copies while preserving chronological keys.
 
@@ -525,6 +626,11 @@ def _dedupe_segment_candidates(paths: List[str], *, context: str) -> List[str]:
     return deduped
 
 
+# -----------------------------------------------------------------------------
+# Function: `_as_bool`.
+# Purpose: Handle as bool workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _as_bool(value: Any, default: bool = False) -> bool:
     if value is None:
         return bool(default)
@@ -540,6 +646,11 @@ def _as_bool(value: Any, default: bool = False) -> bool:
     return bool(default)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_allow_incomplete_budget_models`.
+# Purpose: Handle allow incomplete budget models workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _allow_incomplete_budget_models(recipe: RR.RecipeReader, module: str,
                                     module_vars: Dict[str, Any]) -> bool:
     case_name = str(getattr(recipe, 'eval_ex', '') or '').strip().lower()
@@ -553,6 +664,11 @@ def _allow_incomplete_budget_models(recipe: RR.RecipeReader, module: str,
     return default
 
 
+# -----------------------------------------------------------------------------
+# Function: `_collect_budget_model_inputs`.
+# Purpose: Handle collect budget model inputs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _collect_budget_model_inputs(recipe: RR.RecipeReader, module: str,
                                  module_vars: Dict[str, Any],
                                  allow_incomplete_models: bool = False) -> Tuple[List[str], List[Dict[str, List[str]]], List[Optional[str]], List[str]]:
@@ -712,6 +828,11 @@ def _collect_budget_model_inputs(recipe: RR.RecipeReader, module: str,
     return kept_labels, model_term_groups, area_files, available_vars
 
 
+# -----------------------------------------------------------------------------
+# Function: `_prep_one_budget_variable`.
+# Purpose: Handle prep one budget variable workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _prep_one_budget_variable(preprocessor: PP.DataPreprocessor,
                               file_group: List[str], var_name: str,
                               output_file: str, start_date: str, end_date: str,
@@ -766,6 +887,11 @@ def _prep_one_budget_variable(preprocessor: PP.DataPreprocessor,
     return out_path
 
 
+# -----------------------------------------------------------------------------
+# Function: `_compute_budget_climatology`.
+# Purpose: Handle compute budget climatology workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _compute_budget_climatology(module: str,
                                 hemisphere: str,
                                 year_sta: int,
@@ -827,6 +953,11 @@ def _compute_budget_climatology(module: str,
     season_map = _season_months(hemisphere)
     season_order = ['Spring', 'Summer', 'Autumn', 'Winter']
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_season`.
+    # Purpose: Handle to season workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _to_season(da_month: xr.DataArray) -> xr.DataArray:
         parts = []
         for season in season_order:
@@ -867,6 +998,11 @@ def _compute_budget_climatology(module: str,
     return seas_path, mon_path
 
 
+# -----------------------------------------------------------------------------
+# Function: `_summarize_mass_budget_table`.
+# Purpose: Handle summarize mass budget table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _summarize_mass_budget_table(module: str, seas_file: str, grid_file: str,
                                  hemisphere: str, sector: str,
                                  term_names: List[str]) -> Dict[str, Dict[str, float]]:
@@ -903,6 +1039,11 @@ def _summarize_mass_budget_table(module: str, seas_file: str, grid_file: str,
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_mass_budget_region_table`.
+# Purpose: Handle build mass budget region table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_mass_budget_region_table(module: str, hemisphere: str, grid_file: str,
                                     model_labels: List[str], model_seas_files: List[str],
                                     term_names: List[str]) -> dict:
@@ -915,6 +1056,11 @@ def _build_mass_budget_region_table(module: str, hemisphere: str, grid_file: str
     units = [''] + ['Gt/season'] * len(terms)
     season_order = ['Spring', 'Summer', 'Autumn', 'Winter']
 
+    # -----------------------------------------------------------------------------
+    # Function: `_rows_for_sector`.
+    # Purpose: Handle rows for sector workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _rows_for_sector(sector: str) -> Dict[str, List[List[str]]]:
         season_rows: Dict[str, List[List[str]]] = {s: [] for s in season_order}
         for idx, seas_file in enumerate(model_seas_files):
@@ -959,6 +1105,11 @@ def _build_mass_budget_region_table(module: str, hemisphere: str, grid_file: str
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_mass_budget_terms`.
+# Purpose: Handle resolve mass budget terms workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_mass_budget_terms(module: str,
                                term_names: List[str],
                                model_seas_files: List[str]) -> List[str]:
@@ -968,6 +1119,11 @@ def _resolve_mass_budget_terms(module: str,
     return terms
 
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_monthly_term_series`.
+# Purpose: Handle extract monthly term series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_monthly_term_series(mon_file: str, term_name: str) -> Tuple[np.ndarray, Optional[str]]:
     with xr.open_dataset(mon_file) as ds:
         if term_name not in ds.data_vars:
@@ -987,6 +1143,11 @@ def _extract_monthly_term_series(mon_file: str, term_name: str) -> Tuple[np.ndar
         return vals, units
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_mass_budget_timeseries`.
+# Purpose: Handle plot mass budget timeseries workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_mass_budget_timeseries(module: str,
                                  hemisphere: str,
                                  mon_files: List[str],
@@ -1012,7 +1173,7 @@ def _plot_mass_budget_timeseries(module: str,
     term_units: Dict[str, str] = {}
     group_rank: Dict[str, int] = {}
     for label in model_labels:
-        if pf._is_group_label(label) and label not in group_rank:
+        if _is_group_label(label) and label not in group_rank:
             group_rank[label] = len(group_rank)
 
     for tidx, term_name in enumerate(terms):
@@ -1025,8 +1186,8 @@ def _plot_mass_budget_timeseries(module: str,
             if unit_name and term_name not in term_units:
                 term_units[term_name] = unit_name
             label = model_labels[midx] if midx < len(model_labels) else f'model{midx + 1}'
-            if pf._is_group_label(label):
-                style = pf._group_style(group_rank.get(label, 0))
+            if _is_group_label(label):
+                style = _group_style(group_rank.get(label, 0))
             else:
                 ls, cr = pf._get_style(midx, 0, line_style, color)
                 style = {
@@ -1045,7 +1206,7 @@ def _plot_mass_budget_timeseries(module: str,
             )
             if (
                 isinstance(group_member_files, dict)
-                and pf._is_group_label(label)
+                and _is_group_label(label)
                 and label in group_member_files
             ):
                 member_vals = []
@@ -1097,6 +1258,11 @@ def _plot_mass_budget_timeseries(module: str,
     pf._save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_align_field_to_grid`.
+# Purpose: Handle align field to grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _align_field_to_grid(field_2d: np.ndarray, lon: np.ndarray, lat: np.ndarray) -> np.ndarray:
     field = np.asarray(field_2d, dtype=float)
     if lon.ndim == 1 and lat.ndim == 1:
@@ -1113,6 +1279,11 @@ def _align_field_to_grid(field_2d: np.ndarray, lon: np.ndarray, lat: np.ndarray)
     return field
 
 
+# -----------------------------------------------------------------------------
+# Function: `_collect_mass_budget_spatial_payload`.
+# Purpose: Handle collect mass budget spatial payload workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _collect_mass_budget_spatial_payload(module: str,
                                          model_seas_files: List[str],
                                          model_labels: List[str],
@@ -1154,6 +1325,11 @@ def _collect_mass_budget_spatial_payload(module: str,
     return terms, season_order_ref, payloads
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_mass_budget_season_panels`.
+# Purpose: Handle plot mass budget season panels workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_mass_budget_season_panels(module: str,
                                     hemisphere: str,
                                     model_seas_files: List[str],
@@ -1277,10 +1453,16 @@ def _plot_mass_budget_season_panels(module: str,
             y=0.992,
         )
         pf._finalize_map_layout(fig, has_bottom_cbar=(last_im is not None), pad=0.8)
-        fig_name = fig_dir / f'{module}_map_{_sanitize_group_name(season_name)}.png'
+        module_slug = _sanitize_group_name(str(module).strip().lower())
+        fig_name = fig_dir / f'{module_slug}_process_map_{_sanitize_group_name(season_name)}_raw.png'
         pf._save_fig(str(fig_name))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_cleanup_module_pngs`.
+# Purpose: Handle cleanup module pngs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _cleanup_module_pngs(fig_dir: Path) -> None:
     if not fig_dir.exists():
         return
@@ -1291,6 +1473,11 @@ def _cleanup_module_pngs(fig_dir: Path) -> None:
             continue
 
 
+# -----------------------------------------------------------------------------
+# Function: `_budget_payload_to_paths`.
+# Purpose: Handle budget payload to paths workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _budget_payload_to_paths(payload: Optional[dict]) -> Tuple[Optional[str], Optional[str]]:
     if not isinstance(payload, dict):
         return None, None
@@ -1305,6 +1492,11 @@ def _budget_payload_to_paths(payload: Optional[dict]) -> Tuple[Optional[str], Op
     return seas_path, mon_path
 
 
+# -----------------------------------------------------------------------------
+# Function: `_eval_mass_budget_module`.
+# Purpose: Handle eval mass budget module workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReader,
                              data_dir: str, output_dir: str,
                              recalculate: bool = False,
@@ -1424,6 +1616,11 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
                 area_file = area_files[midx] if midx < len(area_files) else None
                 prep_tasks.append((midx, var_name, model_label, src_group, area_file, out_path))
 
+        # -----------------------------------------------------------------------------
+        # Function: `_run_one_prep_task`.
+        # Purpose: Handle run one prep task workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _run_one_prep_task(task: Tuple[int, str, str, List[str], Optional[str], str]) -> Tuple[int, str, str]:
             midx, var_name, model_label, src_group, area_file, out_path = task
             logger.info(
@@ -1475,6 +1672,11 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
             for midx, model_label in enumerate(model_labels)
         ]
 
+        # -----------------------------------------------------------------------------
+        # Function: `_run_one_climatology_task`.
+        # Purpose: Handle run one climatology task workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _run_one_climatology_task(task: Tuple[int, str, Dict[str, str]]) -> Tuple[int, str, str]:
             midx, model_label, var_files = task
             seas_file, mon_file = _compute_budget_climatology(
@@ -1584,7 +1786,6 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
             )
 
     # Metric-level (post-diagnostic) group means built from per-model budget files.
-    base_model_seas_files = list(model_seas_files)
     base_model_mon_files = list(model_mon_files)
     base_model_labels_for_group = list(model_labels)
     model_labels_for_maps = list(base_model_labels_for_group)
@@ -1672,7 +1873,7 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
         mon_files=base_model_mon_files,
         model_labels=base_model_labels_for_group,
         term_names=term_names,
-        fig_name=str(fig_dir / f'{module}_ts.png'),
+        fig_name=str(fig_dir / f'{str(module).strip().lower()}_process_ts_raw.png'),
         line_style=list(line_styles) if line_styles is not None else None,
         color=list(line_colors) if line_colors is not None else None,
     )
@@ -1683,7 +1884,7 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
             mon_files=model_mon_files[:len(group_labels)],
             model_labels=model_labels_for_ts[:len(group_labels)],
             term_names=term_names,
-            fig_name=str(fig_dir / f'{module}_ts_groupmean.png'),
+            fig_name=str(fig_dir / f'{str(module).strip().lower()}_process_ts_groupmean_raw.png'),
             line_style=list(line_styles) if line_styles is not None else None,
             color=list(line_colors) if line_colors is not None else None,
             group_member_files=group_member_map_mon,
@@ -1693,7 +1894,7 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
         pf.plot_sic_region_map(
             grid_nc_file=grid_file,
             hms=hemisphere,
-            fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+            fig_name=str(fig_dir / 'geo_sector_map.png'),
         )
     except Exception as exc:
         logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -1709,6 +1910,11 @@ def _eval_mass_budget_module(case_name: str, module: str, recipe: RR.RecipeReade
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `eval_simbudget`.
+# Purpose: Handle eval simbudget workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_simbudget(case_name: str, recipe: RR.RecipeReader,
                    data_dir: str, output_dir: str,
                    recalculate: bool = False,
@@ -1725,6 +1931,11 @@ def eval_simbudget(case_name: str, recipe: RR.RecipeReader,
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `eval_snmbudget`.
+# Purpose: Handle eval snmbudget workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_snmbudget(case_name: str, recipe: RR.RecipeReader,
                    data_dir: str, output_dir: str,
                    recalculate: bool = False,

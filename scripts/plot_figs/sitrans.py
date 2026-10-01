@@ -8,6 +8,11 @@ from scipy import stats
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_axes_span_in_figure`.
+# Purpose: Handle axes span in figure workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _axes_span_in_figure(axes):
     axes_list = [ax for ax in np.ravel(np.asarray(axes)).tolist() if ax is not None]
     if not axes_list:
@@ -19,6 +24,11 @@ def _axes_span_in_figure(axes):
     return x0, x1, y0
 
 
+# -----------------------------------------------------------------------------
+# Function: `_legend_ncol_by_width`.
+# Purpose: Handle legend ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     n_items = max(1, len(labels))
     fs = float(fontsize)
@@ -27,44 +37,36 @@ def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     char_px = fs * float(fig.dpi) / 72.0 * 0.60
     item_px = max(70.0, char_px * (widest_chars + 8.0))
     max_fit = max(1, int(fig_width_px // item_px))
-    by_rows = max(1, int(math.ceil(n_items / max(1, int(target_rows)))))
-    return max(1, min(n_items, max_fit, by_rows))
+    max_rows = max(1, int(target_rows))
+
+    for rows in range(1, max_rows + 1):
+        ncol = int(math.ceil(n_items / float(rows)))
+        if ncol <= max_fit:
+            return max(1, min(n_items, ncol))
+
+    return max(1, min(n_items, max_fit))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_place_adaptive_bottom_legend`.
+# Purpose: Handle place adaptive bottom legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _place_adaptive_bottom_legend(fig, axes, handles, labels, *,
                                   target_rows=3, fontsize=None, y_gap=0.020):
-    if not handles or not labels:
-        return None
-    fs = _FS_LEGEND if fontsize is None else float(fontsize)
-    x0, x1, _ = _axes_span_in_figure(axes)
-    width = max(0.15, x1 - x0)
-    ncol = _legend_ncol_by_width(fig, labels, width, target_rows, fs)
-    n_rows = int(math.ceil(len(labels) / float(max(1, ncol))))
-    bottom_margin = min(
-        0.46,
-        max(0.14, 0.07 + 0.056 * n_rows) + max(0.0, float(_LINE_LEGEND_BOTTOM_MARGIN_EXTRA)),
-    )
-    fig.subplots_adjust(bottom=bottom_margin)
-    x0, x1, y0 = _axes_span_in_figure(axes)
-    width = max(0.15, x1 - x0)
-    gap_auto = float(y_gap) + 0.004 * max(0, n_rows - 1)
-    legend_top = max(
-        0.01,
-        y0 - gap_auto - max(0.0, float(_LINE_LEGEND_Y_GAP_EXTRA)),
-    )
-    return fig.legend(
-        handles, labels,
-        loc='upper left',
-        bbox_to_anchor=(x0, legend_top, width, 0.01),
-        bbox_transform=fig.transFigure,
-        ncol=ncol,
-        mode='expand',
-        fontsize=fs,
-        frameon=_LINE_LEGEND_FRAMEON,
-        borderaxespad=0.0,
+    return _place_unified_line_legend(
+        fig,
+        axes,
+        handles,
+        labels,
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_clear_split_outputs`.
+# Purpose: Handle clear split outputs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _clear_split_outputs(fig_name: Optional[str]) -> None:
     if not fig_name:
         return
@@ -76,6 +78,11 @@ def _clear_split_outputs(fig_name: Optional[str]) -> None:
             pass
 
 
+# -----------------------------------------------------------------------------
+# Function: `_split_output_name`.
+# Purpose: Handle split output name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _split_output_name(fig_name: Optional[str], part_idx: int) -> Optional[str]:
     if not fig_name:
         return fig_name
@@ -85,6 +92,11 @@ def _split_output_name(fig_name: Optional[str], part_idx: int) -> Optional[str]:
     return str(p.with_name(f'{p.stem}_part{int(part_idx) + 1}{p.suffix}'))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_chunk_items`.
+# Purpose: Handle chunk items workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _chunk_items(items, labels, chunk_size: int):
     """Return one full chunk so SItrans always renders single-figure outputs."""
     arr = list(items or [])
@@ -92,11 +104,21 @@ def _chunk_items(items, labels, chunk_size: int):
     yield 0, arr, lbl[:len(arr)]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_row_label_text`.
+# Purpose: Handle row label text workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _row_label_text(label: str) -> str:
     txt = str(label)
     return txt.replace('+', '\n+\n')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_cycle_start`.
+# Purpose: Handle sitrans cycle start workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_cycle_start(hms: str) -> datetime.date:
     """Return a reference cycle-start date for SItrans tick formatting."""
     hms = (hms or '').lower()
@@ -106,6 +128,11 @@ def _sitrans_cycle_start(hms: str) -> datetime.date:
     # Antarctic transition year: Mar -> Feb
     return datetime.date(2001, 3, 1)
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_day_to_label`.
+# Purpose: Handle sitrans day to label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_day_to_label(day_val, hms: str) -> str:
     """Convert SItrans day index (0-based) to MM-DD label."""
     if not np.isfinite(day_val):
@@ -118,6 +145,11 @@ def _sitrans_day_to_label(day_val, hms: str) -> str:
     label_date = base + datetime.timedelta(days=day_idx)
     return label_date.strftime('%m-%d')
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_day_to_month_label`.
+# Purpose: Handle sitrans day to month label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_day_to_month_label(day_val, hms: str) -> str:
     """Convert SItrans day index (0-based) to short month label (e.g., Mar.)."""
     if not np.isfinite(day_val):
@@ -133,6 +165,11 @@ def _sitrans_day_to_month_label(day_val, hms: str) -> str:
     }
     return month_map.get(int(label_date.month), label_date.strftime('%b.'))
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_colorbar_ticks`.
+# Purpose: Handle sitrans colorbar ticks workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_colorbar_ticks(hms: str) -> np.ndarray:
     """Return monthly SItrans tick positions in cycle-day coordinates."""
     base = _sitrans_cycle_start(hms)
@@ -145,6 +182,11 @@ def _sitrans_colorbar_ticks(hms: str) -> np.ndarray:
     ticks.append(365)
     return np.array(sorted(set(ticks)), dtype=float)
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_discrete_bounds_and_ticks`.
+# Purpose: Handle sitrans discrete bounds and ticks workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_discrete_bounds_and_ticks(hms: str, vmin: float, vmax: float):
     """Build clipped discrete boundaries and centered tick positions for SItrans maps."""
     month_ticks = _sitrans_colorbar_ticks(hms)
@@ -157,6 +199,11 @@ def _sitrans_discrete_bounds_and_ticks(hms: str, vmin: float, vmax: float):
     tick_labels = [_sitrans_day_to_label(x, hms) for x in tick_pos]
     return bounds, tick_pos, tick_labels
 
+# -----------------------------------------------------------------------------
+# Function: `_sitrans_panel_map`.
+# Purpose: Handle sitrans panel map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sitrans_panel_map(grid_file, field_list, panel_labels, hms, fig_name,
                        vmin, vmax, cmap='viridis', unit='days',
                        value_label_mode='days', use_discrete_dates=False,
@@ -288,6 +335,11 @@ def _sitrans_panel_map(grid_file, field_list, panel_labels, hms, fig_name,
 
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `advance_climatology_map`.
+# Purpose: Handle advance climatology map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def advance_climatology_map(grid_file, field_list, panel_labels, hms, fig_name,
                             cmap='viridis', n_obs: int = 1,
                             plot_mode: str = 'raw', diff_cmap='RdBu_r'):
@@ -301,6 +353,11 @@ def advance_climatology_map(grid_file, field_list, panel_labels, hms, fig_name,
         plot_mode=plot_mode, diff_cmap=diff_cmap,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `retreat_climatology_map`.
+# Purpose: Handle retreat climatology map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def retreat_climatology_map(grid_file, field_list, panel_labels, hms, fig_name,
                             cmap='viridis', n_obs: int = 1,
                             plot_mode: str = 'raw', diff_cmap='RdBu_r'):
@@ -312,10 +369,15 @@ def retreat_climatology_map(grid_file, field_list, panel_labels, hms, fig_name,
         plot_mode=plot_mode, diff_cmap=diff_cmap,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `advance_std_map`.
+# Purpose: Handle advance std map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def advance_std_map(grid_file, field_list, panel_labels, hms, fig_name,
                     cmap='Purples', n_obs: int = 1,
                     plot_mode: str = 'raw', diff_cmap='RdBu_r'):
-    """Master figure for SItrans advance variability (std)."""
+    """Master figure for SItrans advance detrended-STD variability."""
     vals = np.concatenate([np.ravel(np.array(f, dtype=float)) for f in field_list])
     finite = vals[np.isfinite(vals)]
     vmax = np.nanpercentile(finite, 95) if finite.size else 30.0
@@ -323,14 +385,20 @@ def advance_std_map(grid_file, field_list, panel_labels, hms, fig_name,
     _sitrans_panel_map(
         grid_file, field_list, panel_labels, hms, fig_name,
         vmin=0.0, vmax=vmax, cmap=cmap,
-        unit='days', value_label_mode='days', use_discrete_dates=False, n_obs=n_obs,
+        unit='Detrended STD (days)', value_label_mode='days',
+        use_discrete_dates=False, n_obs=n_obs,
         plot_mode=plot_mode, diff_cmap=diff_cmap,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `retreat_std_map`.
+# Purpose: Handle retreat std map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def retreat_std_map(grid_file, field_list, panel_labels, hms, fig_name,
                     cmap='Purples', n_obs: int = 1,
                     plot_mode: str = 'raw', diff_cmap='RdBu_r'):
-    """Master figure for SItrans retreat variability (std)."""
+    """Master figure for SItrans retreat detrended-STD variability."""
     vals = np.concatenate([np.ravel(np.array(f, dtype=float)) for f in field_list])
     finite = vals[np.isfinite(vals)]
     vmax = np.nanpercentile(finite, 95) if finite.size else 30.0
@@ -338,10 +406,16 @@ def retreat_std_map(grid_file, field_list, panel_labels, hms, fig_name,
     _sitrans_panel_map(
         grid_file, field_list, panel_labels, hms, fig_name,
         vmin=0.0, vmax=vmax, cmap=cmap,
-        unit='days', value_label_mode='days', use_discrete_dates=False, n_obs=n_obs,
+        unit='Detrended STD (days)', value_label_mode='days',
+        use_discrete_dates=False, n_obs=n_obs,
         plot_mode=plot_mode, diff_cmap=diff_cmap,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `advance_trend_map`.
+# Purpose: Handle advance trend map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def advance_trend_map(grid_file, field_list, panel_labels, hms, fig_name,
                       cmap='RdBu_r', n_obs: int = 1,
                       plot_mode: str = 'raw', sigmask_list=None):
@@ -357,6 +431,11 @@ def advance_trend_map(grid_file, field_list, panel_labels, hms, fig_name,
         plot_mode=plot_mode, diff_cmap=cmap, sigmask_list=sigmask_list,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `retreat_trend_map`.
+# Purpose: Handle retreat trend map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def retreat_trend_map(grid_file, field_list, panel_labels, hms, fig_name,
                       cmap='RdBu_r', n_obs: int = 1,
                       plot_mode: str = 'raw', sigmask_list=None):
@@ -372,6 +451,11 @@ def retreat_trend_map(grid_file, field_list, panel_labels, hms, fig_name,
         plot_mode=plot_mode, diff_cmap=cmap, sigmask_list=sigmask_list,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_iiee_all`.
+# Purpose: Handle plot sitrans iiee all workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_iiee_all(curves_list, panel_labels, fig_name='', hms: str = 'nh'):
     """Plot consolidated SItrans IIEE curves for obs2 baseline and all models."""
     if not curves_list:
@@ -406,6 +490,11 @@ def plot_sitrans_iiee_all(curves_list, panel_labels, fig_name='', hms: str = 'nh
     ]
     legend_labels = [h.get_label() for h in legend_handles]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_compact_title`.
+    # Purpose: Handle compact title workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _compact_title(label_text: str) -> str:
         txt = str(label_text or '').strip()
         low = txt.lower()
@@ -455,7 +544,6 @@ def plot_sitrans_iiee_all(curves_list, panel_labels, fig_name='', hms: str = 'nh
             ax[ii].tick_params(axis='both', labelsize=_FS_TICK)
             _apply_light_grid(ax[ii])
             ax[ii].set_ylim(0, ymax)
-            row_idx, col_idx = divmod(ii, n_cols)
             finite_days = days[np.isfinite(days)]
             if finite_days.size:
                 xmin = float(np.nanmin(finite_days))
@@ -486,32 +574,27 @@ def plot_sitrans_iiee_all(curves_list, panel_labels, fig_name='', hms: str = 'nh
         _finalize_line_layout(fig, legend_location='none', pad=0.80)
         raw_wspace = _line_subplot_wspace(0.12)
         raw_hspace = _line_subplot_hspace(0.34)
-        legend_ncol = max(1, min(3, len(legend_labels)))
-        legend_rows = int(math.ceil(len(legend_labels) / float(max(1, legend_ncol))))
-        top_axes = max(0.70, 0.94 - 0.07 * legend_rows)
-        legend_y = min(0.995, top_axes + 0.018)
         fig.subplots_adjust(
-            left=0.07, right=0.985, top=top_axes, bottom=0.10,
+            left=0.07, right=0.985, bottom=0.10,
             wspace=min(0.24, max(0.04, float(raw_wspace))),
             hspace=max(0.50, float(raw_hspace)),
         )
-        fig.legend(
+        _place_adaptive_bottom_legend(
+            fig,
+            ax[:n_panels],
             legend_handles,
             legend_labels,
-            loc='lower left',
-            bbox_to_anchor=(0.29875, legend_y, 0.4575, 0.01),
-            bbox_transform=fig.transFigure,
-            mode='expand',
-            ncol=legend_ncol,
-            fontsize=max(15, _FS_LEGEND + 5),
-            frameon=_LINE_LEGEND_FRAMEON,
-            borderaxespad=0.0,
-            labelspacing=0.42,
-            columnspacing=0.85,
-            handletextpad=0.45,
+            target_rows=3,
+            fontsize=max(9, _FS_LEGEND - 1),
+            y_gap=0.052,
         )
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `_overlay_sig_markers`.
+# Purpose: Handle overlay sig markers workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _overlay_sig_markers(ax, lon, lat, sigmask: np.ndarray):
     """Overlay sparse significance markers on one map axis."""
     lon = np.asarray(lon)
@@ -537,6 +620,11 @@ def _overlay_sig_markers(ax, lon, lat, sigmask: np.ndarray):
         marker='x', linewidths=0.45,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_bias_map`.
+# Purpose: Handle plot sitrans bias map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_bias_map(grid_file, metrics_list, panel_labels, hms, fig_name=None,
                           cmap='RdBu_r', phase: str = 'advance'):
     """Plot SItrans bias maps (model - obs) for one phase (advance/retreat)."""
@@ -604,9 +692,14 @@ def plot_sitrans_bias_map(grid_file, metrics_list, panel_labels, hms, fig_name=N
     fig.suptitle(phase_title, fontsize=_FS_MAIN_TITLE, y=0.995)
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_std_map`.
+# Purpose: Handle plot sitrans std map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_std_map(grid_file, metrics_list, panel_labels, hms, fig_name=None,
                          std_cmap='Purples', diff_cmap='RdBu_r'):
-    """Plot SItrans variability maps: obs STD, model STD, and STD difference."""
+    """Plot SItrans detrended-STD maps: obs, model, and difference."""
     with xr.open_dataset(grid_file) as ds:
         lon, lat = ds['lon'], ds['lat']
 
@@ -641,8 +734,8 @@ def plot_sitrans_std_map(grid_file, metrics_list, panel_labels, hms, fig_name=No
     diff_vmax = max(1.0, float(diff_vmax))
 
     titles = [
-        'Advance STD obs', 'Advance STD model', 'Advance STD diff',
-        'Retreat STD obs', 'Retreat STD model', 'Retreat STD diff',
+        'Advance Detrended STD (obs)', 'Advance Detrended STD (model)', 'Advance Detrended STD (diff)',
+        'Retreat Detrended STD (obs)', 'Retreat Detrended STD (model)', 'Retreat Detrended STD (diff)',
     ]
     max_rows_per_fig = 4
     proj = ccrs.Stereographic(central_latitude=-90 if hms == 'sh' else 90, central_longitude=0)
@@ -703,17 +796,22 @@ def plot_sitrans_std_map(grid_file, metrics_list, panel_labels, hms, fig_name=No
         _finalize_map_layout(fig, has_bottom_cbar=False, pad=0.72)
         _bottom_cbar(
             fig, sm_std, ax.ravel().tolist(),
-            label='STD (days)', extend='auto',
+            label='Detrended STD (days)', extend='auto',
             data=std_finite,
         )
         _bottom_cbar(
             fig, sm_diff, ax.ravel().tolist(),
-            label='Difference (days)', extend='auto',
+            label='Detrended STD Difference (days)', extend='auto',
             pad=0.115,
             data=diff_finite,
         )
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_trend_map`.
+# Purpose: Handle plot sitrans trend map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_trend_map(grid_file, metrics_list, panel_labels, hms, fig_name=None, cmap='RdBu_r'):
     """Plot SItrans trend maps: obs trend, model trend, and trend difference."""
     with xr.open_dataset(grid_file) as ds:
@@ -810,6 +908,11 @@ def plot_sitrans_trend_map(grid_file, metrics_list, panel_labels, hms, fig_name=
 
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_significance_map`.
+# Purpose: Handle plot sitrans significance map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_significance_map(grid_file, metrics_list, panel_labels, hms, fig_name=None):
     """Plot SItrans trend-significance masks (model trend p < threshold)."""
     with xr.open_dataset(grid_file) as ds:
@@ -873,6 +976,11 @@ def plot_sitrans_significance_map(grid_file, metrics_list, panel_labels, hms, fi
             )
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_relationship_scatter`.
+# Purpose: Handle plot sitrans relationship scatter workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_relationship_scatter(rel_list, panel_labels, fig_name='',
                                       obs_ref_label: str = 'Obs1',
                                       comparator_label: str = 'Comparator'):
@@ -955,6 +1063,11 @@ def plot_sitrans_relationship_scatter(rel_list, panel_labels, fig_name='',
         )
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_region_timeseries`.
+# Purpose: Handle plot sitrans region timeseries workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_region_timeseries(region_payloads, phase: str, fig_name='', hms: str = 'nh'):
     """Plot regional annual mean transition-date time series."""
     if not region_payloads:
@@ -1092,6 +1205,11 @@ def plot_sitrans_region_timeseries(region_payloads, phase: str, fig_name='', hms
         )
         _save_fig(_split_output_name(fig_name, part_idx))
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_skill_heatmap`.
+# Purpose: Handle plot sitrans skill heatmap workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_skill_heatmap(matrix: np.ndarray, row_labels, col_labels,
                                fig_name='', cmap='RdBu_r'):
     """Plot model-skill summary heatmap for SItrans diagnostics."""
@@ -1126,6 +1244,11 @@ def plot_sitrans_skill_heatmap(matrix: np.ndarray, row_labels, col_labels,
     _finalize_layout(fig)
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sitrans_model_ranking`.
+# Purpose: Handle plot sitrans model ranking workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sitrans_model_ranking(scores: np.ndarray, labels, fig_name=''):
     """Plot one simple ranking bar chart (smaller score = better)."""
     vals = np.asarray(scores, dtype=float).reshape(-1)

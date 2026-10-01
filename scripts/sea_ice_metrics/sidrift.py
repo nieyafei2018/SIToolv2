@@ -25,6 +25,11 @@ class SIDMetrics(SeaIceMetricsBase):
     All calculations are performed in the x-y direction.
     """
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, hemisphere: str, time_sta: int, time_end: int,
                  metric: str = 'MAE', projection: str = 'stere'):
         """
@@ -46,6 +51,11 @@ class SIDMetrics(SeaIceMetricsBase):
         # Initialize Cartopy projection
         self._init_cartopy_projection()
 
+    # -----------------------------------------------------------------------------
+    # Function: `_init_cartopy_projection`.
+    # Purpose: Handle init cartopy projection workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _init_cartopy_projection(self):
         """
         Initialize Cartopy projection based on hemisphere and projection type.
@@ -64,6 +74,11 @@ class SIDMetrics(SeaIceMetricsBase):
         # Source projection (geographic coordinates)
         self.src_proj = ccrs.PlateCarree()
 
+    # -----------------------------------------------------------------------------
+    # Function: `_infer_direction_from_attrs`.
+    # Purpose: Handle infer direction from attrs workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _infer_direction_from_attrs(u_attrs: Dict[str, Any],
                                     v_attrs: Dict[str, Any]) -> Tuple[Optional[str], str]:
@@ -73,6 +88,11 @@ class SIDMetrics(SeaIceMetricsBase):
             (direction, reason)
             direction is one of {'xy', 'lonlat', None}.
         """
+        # -----------------------------------------------------------------------------
+        # Function: `_norm_text`.
+        # Purpose: Handle norm text workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _norm_text(attrs: Dict[str, Any]) -> str:
             parts = []
             for key in ('standard_name', 'long_name', 'comment', 'description'):
@@ -107,6 +127,11 @@ class SIDMetrics(SeaIceMetricsBase):
 
         return None, 'no decisive metadata'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_get_time_dimension`.
+    # Purpose: Handle get time dimension workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _get_time_dimension(dataset: xr.Dataset, var_key: Optional[str] = None) -> str:
         """Identify time dimension name in dataset."""
@@ -124,6 +149,11 @@ class SIDMetrics(SeaIceMetricsBase):
             raise ValueError("No time dimension found in dataset.")
         return time_candidates[0]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_time_values_to_keys`.
+    # Purpose: Handle time values to keys workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _time_values_to_keys(time_values: Any) -> List[Tuple[int, int, int]]:
         """Convert decoded time values into `(year, month, day)` tuples.
@@ -148,6 +178,11 @@ class SIDMetrics(SeaIceMetricsBase):
         time_vals = pd.to_datetime(vals)
         return [(int(t.year), int(t.month), int(t.day)) for t in time_vals]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_normalize_time_keys`.
+    # Purpose: Handle normalize time keys workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _normalize_time_keys(time_keys: Optional[list], nt: int) -> List[Tuple[int, ...]]:
         """Normalize arbitrary time key containers into tuples for set operations."""
@@ -163,6 +198,11 @@ class SIDMetrics(SeaIceMetricsBase):
         # Fallback to index-based alignment when explicit time keys are absent.
         return [(idx,) for idx in range(nt)]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_time_keys_to_yearmon`.
+    # Purpose: Handle time keys to yearmon workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _time_keys_to_yearmon(time_keys: List[Tuple[int, ...]]) -> List[Tuple[int, int]]:
         """Convert normalized time keys into (year, month) tuples when available."""
@@ -172,6 +212,11 @@ class SIDMetrics(SeaIceMetricsBase):
                 out.append((int(key[0]), int(key[1])))
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_align_to_common_times`.
+    # Purpose: Handle align to common times workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @classmethod
     def _align_to_common_times(cls,
                                u1: np.ndarray, v1: np.ndarray, time1: Optional[list],
@@ -196,6 +241,11 @@ class SIDMetrics(SeaIceMetricsBase):
         keys1_raw = cls._normalize_time_keys(time1, nt1)
         keys2_raw = cls._normalize_time_keys(time2, nt2)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_canon_key`.
+        # Purpose: Handle canon key workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _canon_key(key: Tuple[int, ...]) -> Tuple[int, ...]:
             if key_mode == 'yearmon' and len(key) >= 2:
                 return (int(key[0]), int(key[1]))
@@ -254,6 +304,11 @@ class SIDMetrics(SeaIceMetricsBase):
             obs_va = None
         return u1a, v1a, u2a, v2a, obs_ua, obs_va, common_keys
 
+    # -----------------------------------------------------------------------------
+    # Function: `SID_1M_metrics`.
+    # Purpose: Handle SID 1M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SID_1M_metrics(self, u_file: str, u_key: str, v_file: str, v_key: str,
                        rotate: Optional[bool] = None,
                        model_direction: str = 'xy',
@@ -287,7 +342,6 @@ class SIDMetrics(SeaIceMetricsBase):
         with xr.open_dataset(u_file) as ds:
             u = np.array(ds[u_key])
             lon = np.array(ds['lon'])
-            lat = np.array(ds['lat'])
             u_attrs = dict(ds[u_key].attrs)
             time_name = self._get_time_dimension(ds, u_key)
             time_keys = self._time_values_to_keys(ds[time_name].values)
@@ -295,7 +349,7 @@ class SIDMetrics(SeaIceMetricsBase):
             v = np.array(ds[v_key])
             v_attrs = dict(ds[v_key].attrs)
 
-        nt, nx, ny = u.shape
+        nt = u.shape[0]
         logger.info("\tProcessing %d time steps ...", nt)
 
         # --- Vector rotation handling ---
@@ -375,6 +429,11 @@ class SIDMetrics(SeaIceMetricsBase):
         out['yearmon_list'] = [(int(y), int(m)) for y, m, *_ in time_keys]
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calculate_drift_metrics`.
+    # Purpose: Handle calculate drift metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _calculate_drift_metrics(self, u: np.ndarray, v: np.ndarray) -> Dict[str, Union[float, np.ndarray]]:
         """
         Calculate comprehensive drift metrics from u and v components.
@@ -407,6 +466,8 @@ class SIDMetrics(SeaIceMetricsBase):
 
         MKE_ts_ano = np.array([MKE_ts[j] - MKE_ts_clim[j % 12] for j in range(nt)])
         speed_ts_ano = np.array([speed_ts[j] - speed_ts_clim[j % 12] for j in range(nt)])
+        MKE_ano_std_map = utils.detrended_std_map(MKE_ano, min_count=2)
+        speed_ano_std_map = utils.detrended_std_map(speed_ano, min_count=2)
 
         # 3. Trend
         months = np.arange(1, nt + 1)
@@ -439,9 +500,11 @@ class SIDMetrics(SeaIceMetricsBase):
         # Time series trends
         MKE_ts_ano_tr = stats.linregress(months, MKE_ts_ano)
         speed_ts_ano_tr = stats.linregress(months, speed_ts_ano)
+        MKE_ts_ano_std = utils.detrended_std_1d(MKE_ts_ano)
+        speed_ts_ano_std = utils.detrended_std_1d(speed_ts_ano)
 
         # Scalar differences derived from the current evaluation footprint
-        MKE_std_diff = float(np.nanmean(np.nanstd(MKE_ano, axis=0)))
+        MKE_std_diff = float(np.nanmean(MKE_ano_std_map))
         MKE_trend_diff = float(np.nanmean(MKE_ano_tr))
         MKE_ts_trend_diff = float(MKE_ts_ano_tr.slope * 12 * 10)
 
@@ -450,14 +513,21 @@ class SIDMetrics(SeaIceMetricsBase):
                 'MKE_clim': MKE_clim, 'speed_clim': speed_clim,
                 'MKE_ts_clim': MKE_ts_clim, 'speed_ts_clim': speed_ts_clim,
                 'MKE_ano': MKE_ano, 'speed_ano': speed_ano,
+                'MKE_ano_std_map': MKE_ano_std_map, 'speed_ano_std_map': speed_ano_std_map,
                 'MKE_ts_ano': MKE_ts_ano, 'speed_ts_ano': speed_ts_ano,
                 'MKE_ano_tr': MKE_ano_tr, 'MKE_ano_tr_p': MKE_ano_tr_p, 'speed_ano_tr': speed_ano_tr,
                 'speed_ano_tr_p': speed_ano_tr_p,
                 'MKE_ts_ano_tr': MKE_ts_ano_tr, 'speed_ts_ano_tr': speed_ts_ano_tr,
-                'MKE_ts_ano_std': np.nanstd(MKE_ts_ano), 'speed_ts_ano_std': np.nanstd(speed_ts_ano),
-                'MKE_std_diff': MKE_std_diff, 'MKE_trend_diff': MKE_trend_diff,
+                'MKE_ts_ano_std': MKE_ts_ano_std, 'speed_ts_ano_std': speed_ts_ano_std,
+                'MKE_std_diff': MKE_std_diff, 'MKE_ano_std_map_mean_detrended': MKE_std_diff,
+                'MKE_trend_diff': MKE_trend_diff,
                 'MKE_ts_trend_diff': MKE_ts_trend_diff}
 
+    # -----------------------------------------------------------------------------
+    # Function: `SID_2M_metrics`.
+    # Purpose: Handle SID 2M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SID_2M_metrics(self, u_file1: str, u_key1: str, v_file1: str, v_key1: str,
                        u_file2: str, u_key2: str, v_file2: str, v_key2: str,
                        rotate1: Optional[bool] = None, rotate2: Optional[bool] = None,
@@ -635,11 +705,30 @@ class SIDMetrics(SeaIceMetricsBase):
                 'match_mode': match_mode,
                 'sid1_metric': sid1,
                 'sid2_metric': sid2,
-                'MKE_std_diff': utils.MatrixDiff(sid1['MKE_ano'], sid2['MKE_ano'], metric=self.metric, mask=True),
+                'MKE_std_diff': utils.MatrixDiff(
+                    sid1.get('MKE_ano_std_map', np.array([])),
+                    sid2.get('MKE_ano_std_map', np.array([])),
+                    metric=self.metric,
+                    mask=True,
+                ),
+                'MKE_std_map_diff_detrended': utils.MatrixDiff(
+                    sid1.get('MKE_ano_std_map', np.array([])),
+                    sid2.get('MKE_ano_std_map', np.array([])),
+                    metric=self.metric,
+                    mask=True,
+                ),
                 'MKE_ts_ano_std': utils.MatrixDiff(sid1['MKE_ts_ano_std'], sid2['MKE_ts_ano_std'], metric=self.metric, mask=True),
+                'MKE_ts_ano_std_diff_detrended': utils.MatrixDiff(
+                    sid1['MKE_ts_ano_std'], sid2['MKE_ts_ano_std'], metric=self.metric, mask=True
+                ),
                 'MKE_trend_diff': utils.MatrixDiff(sid1['MKE_ano_tr'], sid2['MKE_ano_tr'], metric='MAE', mask=True),
-                'MKE_ts_trend_diff': sid1['MKE_ts_trend_diff'] - sid2['MKE_ts_trend_diff']}
+                'MKE_ts_trend_diff': abs(sid1['MKE_ts_trend_diff'] - sid2['MKE_ts_trend_diff'])}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_validate_uv_match`.
+    # Purpose: Handle validate uv match workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _validate_uv_match(u1: np.ndarray, v1: np.ndarray,
                            u2: np.ndarray, v2: np.ndarray,
@@ -685,6 +774,11 @@ class SIDMetrics(SeaIceMetricsBase):
         v2o[invalid] = np.nan
         return u1o, v1o, u2o, v2o
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calculate_vector_correlation`.
+    # Purpose: Handle calculate vector correlation workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _calculate_vector_correlation(self, u1: np.ndarray, v1: np.ndarray,
                                       u2: np.ndarray, v2: np.ndarray):
         """
@@ -706,16 +800,42 @@ class SIDMetrics(SeaIceMetricsBase):
         # Propagate one common valid-time mask across all components so each
         # covariance term uses exactly the same samples.
         valid = np.isfinite(u1) & np.isfinite(v1) & np.isfinite(u2) & np.isfinite(v2)
-        u1m = np.where(valid, u1, np.nan)
-        v1m = np.where(valid, v1, np.nan)
-        u2m = np.where(valid, u2, np.nan)
-        v2m = np.where(valid, v2, np.nan)
+
+        # Memory optimisation: store the NaN-masked time-series arrays as float32.
+        # The four (T, nx, ny) arrays dominate the RSS footprint (observed ~12 GB for
+        # the SH hemisphere at 60 km resolution).  Converting to float32 before the
+        # covariance loop halves their combined size to ~6 GB, well within the 125 GB
+        # system memory ceiling.
+        #
+        # The covariance helper still accumulates in float64 (`dtype=float` in
+        # np.nansum) to preserve numerical precision during the summation step.
+        # The final vectcorr map is returned as float64 (unchanged interface).
+        f32 = np.float32
+        u1m = np.where(valid, u1, np.nan).astype(f32)
+        v1m = np.where(valid, v1, np.nan).astype(f32)
+        u2m = np.where(valid, u2, np.nan).astype(f32)
+        v2m = np.where(valid, v2, np.nan).astype(f32)
+
+        # Release the original (possibly float64) input views — they are no longer
+        # needed and keeping them alive would double peak RSS during the cov loop.
+        del u1, v1, u2, v2
 
         n_valid = np.sum(valid, axis=0).astype(float)
+        del valid  # boolean mask is large; free early
         denom = n_valid - 1.0
 
+        # -----------------------------------------------------------------------------
+        # Function: `_covariance`.
+        # Purpose: Handle covariance workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _covariance(a: np.ndarray, b: np.ndarray) -> np.ndarray:
-            """Sample covariance with NaN-safe common mask and ddof=1."""
+            """Sample covariance with NaN-safe common mask and ddof=1.
+
+            Inputs *a* and *b* may be float32; intermediate sums are promoted to
+            float64 via ``dtype=float`` in np.nansum to avoid catastrophic
+            cancellation when the series mean is large relative to its variance.
+            """
             mean_a = np.divide(
                 np.nansum(a, axis=0, dtype=float),
                 n_valid,
@@ -728,6 +848,8 @@ class SIDMetrics(SeaIceMetricsBase):
                 out=np.full((nx, ny), np.nan, dtype=float),
                 where=n_valid > 0,
             )
+            # Subtract means from float32 arrays; the product and nansum still
+            # accumulate in float64 due to the explicit dtype= argument.
             numerator = np.nansum((a - mean_a) * (b - mean_b), axis=0, dtype=float)
             return np.divide(
                 numerator,
@@ -747,6 +869,11 @@ class SIDMetrics(SeaIceMetricsBase):
         u2v2 = _covariance(u2m, v2m)
         v1v2 = _covariance(v1m, v2m)
         v1u2 = _covariance(v1m, u2m)
+
+        # All 10 covariance maps are now float64 2-D arrays.
+        # The float32 time-series arrays are no longer needed; release them so
+        # the OS can reclaim ~6 GB before the polynomial algebra below.
+        del u1m, v1m, u2m, v2m
 
         # --- Crosby (1993) vector correlation formula ---
         # Numerator f = f0 + f1 encodes cross-covariance between the two vector fields

@@ -104,6 +104,12 @@ _LINE_LEGEND_FONTSIZE = None
 _LINE_LEGEND_FRAMEON = True
 _LINE_LEGEND_Y_GAP_EXTRA = 0.0
 _LINE_LEGEND_BOTTOM_MARGIN_EXTRA = 0.0
+_LINE_LEGEND_POSITION = 'top'
+# ``None`` means adaptive (auto) layout instead of fixed value.
+_LINE_LEGEND_NCOL_FIXED = None
+_LINE_LEGEND_MAX_ROWS = None
+_LINE_LEGEND_TOP_GAP = 0.012
+_LINE_LEGEND_TOP_MARGIN_EXTRA = 0.0
 _LINE_SYM_Y_PAD_RATIO = 0.08
 
 _MAP_COASTLINE_LINEWIDTH = 0.5
@@ -172,17 +178,32 @@ def _get_style(idx: int, n_obs: int,
         cr = COLORS[model_idx % len(COLORS)]
     return ls, cr
 
+# -----------------------------------------------------------------------------
+# Function: `_obs_style`.
+# Purpose: Handle obs style workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _obs_style(obs_idx: int):
     """Return canonical observation line style by observation index."""
     if obs_idx <= 0:
         return {'color': 'k', 'linestyle': '-', 'linewidth': _LINE_OBS1_LINEWIDTH}
     return {'color': '0.5', 'linestyle': '-', 'linewidth': _LINE_OBS2_LINEWIDTH}
 
+# -----------------------------------------------------------------------------
+# Function: `_line_model_width`.
+# Purpose: Handle line model width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_model_width(default: Optional[float] = None) -> float:
     """Return runtime model linewidth (or fallback default)."""
     base = _LINE_MODEL_LINEWIDTH if default is None else float(default)
     return max(0.05, float(base))
 
+# -----------------------------------------------------------------------------
+# Function: `_line_model_alpha`.
+# Purpose: Handle line model alpha workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_model_alpha(default: Optional[float] = None) -> Optional[float]:
     """Return runtime model alpha (or fallback default)."""
     if _LINE_MODEL_ALPHA is None:
@@ -192,6 +213,11 @@ def _line_model_alpha(default: Optional[float] = None) -> Optional[float]:
     except Exception:
         return default
 
+# -----------------------------------------------------------------------------
+# Function: `_line_subplot_wspace`.
+# Purpose: Handle line subplot wspace workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_subplot_wspace(default: float) -> float:
     """Return line-chart subplot horizontal spacing."""
     base = default if _LINE_SUBPLOT_WSPACE is None else _LINE_SUBPLOT_WSPACE
@@ -200,6 +226,11 @@ def _line_subplot_wspace(default: float) -> float:
     except Exception:
         return max(0.0, float(default))
 
+# -----------------------------------------------------------------------------
+# Function: `_line_subplot_hspace`.
+# Purpose: Handle line subplot hspace workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_subplot_hspace(default: float) -> float:
     """Return line-chart subplot vertical spacing."""
     base = default if _LINE_SUBPLOT_HSPACE is None else _LINE_SUBPLOT_HSPACE
@@ -208,6 +239,11 @@ def _line_subplot_hspace(default: float) -> float:
     except Exception:
         return max(0.0, float(default))
 
+# -----------------------------------------------------------------------------
+# Function: `_line_bottom_legend_y`.
+# Purpose: Handle line bottom legend y workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_bottom_legend_y(default: float = 0.0) -> float:
     """Return runtime-adjusted legend y-anchor for bottom legends."""
     base = float(default)
@@ -216,6 +252,11 @@ def _line_bottom_legend_y(default: float = 0.0) -> float:
     except Exception:
         return base
 
+# -----------------------------------------------------------------------------
+# Function: `_line_bottom_margin`.
+# Purpose: Handle line bottom margin workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_bottom_margin(default: float = 0.18) -> float:
     """Return runtime-adjusted bottom margin for bottom legends."""
     base = max(0.0, float(default))
@@ -224,6 +265,384 @@ def _line_bottom_margin(default: float = 0.18) -> float:
     except Exception:
         return base
 
+# -----------------------------------------------------------------------------
+# Function: `_line_top_legend_ncol`.
+# Purpose: Handle line top legend ncol workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _line_top_legend_ncol(default: Optional[int] = None) -> Optional[int]:
+    """Return runtime fixed legend-column target (or ``None`` for auto)."""
+    base = _LINE_LEGEND_NCOL_FIXED if _LINE_LEGEND_NCOL_FIXED is not None else default
+    if base is None:
+        return None
+    try:
+        return max(1, int(base))
+    except Exception:
+        if default is None:
+            return None
+        try:
+            return max(1, int(default))
+        except Exception:
+            return None
+
+# -----------------------------------------------------------------------------
+# Function: `_line_top_legend_max_rows`.
+# Purpose: Handle line top legend max rows workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _line_top_legend_max_rows(default: Optional[int] = None) -> Optional[int]:
+    """Return runtime legend-row cap (or ``None`` for auto heuristic)."""
+    base = _LINE_LEGEND_MAX_ROWS if _LINE_LEGEND_MAX_ROWS is not None else default
+    if base is None:
+        return None
+    try:
+        return max(1, int(base))
+    except Exception:
+        if default is None:
+            return None
+        try:
+            return max(1, int(default))
+        except Exception:
+            return None
+
+# -----------------------------------------------------------------------------
+# Function: `_legend_axes_list`.
+# Purpose: Handle legend axes list workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _legend_axes_list(fig, axes=None):
+    """Return a flat list of axes that belong to *fig*."""
+    if axes is None:
+        axes_iter = list(getattr(fig, 'axes', []) or [])
+    elif isinstance(axes, (list, tuple, np.ndarray)):
+        axes_iter = [ax for ax in np.ravel(np.asarray(axes, dtype=object)).tolist()]
+    else:
+        axes_iter = [axes]
+
+    out = []
+    for ax in axes_iter:
+        if ax is None:
+            continue
+        if getattr(ax, 'figure', None) is not fig:
+            continue
+        out.append(ax)
+    return out
+
+# -----------------------------------------------------------------------------
+# Function: `_legend_axes_span`.
+# Purpose: Handle legend axes span workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _legend_axes_span(axes_list):
+    """Return axes span (x0, x1, y0, y1) in figure coordinates."""
+    if not axes_list:
+        return 0.08, 0.98, 0.10, 0.90
+    boxes = [ax.get_position() for ax in axes_list]
+    x0 = float(min(bb.x0 for bb in boxes))
+    x1 = float(max(bb.x1 for bb in boxes))
+    y0 = float(min(bb.y0 for bb in boxes))
+    y1 = float(max(bb.y1 for bb in boxes))
+    return x0, x1, y0, y1
+
+# -----------------------------------------------------------------------------
+# Function: `_legend_axes_tight_top`.
+# Purpose: Handle legend axes tight top workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _legend_axes_tight_top(fig, axes_list, renderer):
+    """Return max tight-bbox top for axes in figure coordinates."""
+    tops = []
+    for ax in axes_list:
+        try:
+            bb = ax.get_tightbbox(renderer)
+        except Exception:
+            bb = None
+        if bb is None:
+            continue
+        bbf = bb.transformed(fig.transFigure.inverted())
+        yt = float(bbf.y1)
+        if np.isfinite(yt):
+            tops.append(yt)
+    if tops:
+        return float(max(tops))
+    return _legend_axes_span(axes_list)[3]
+
+# -----------------------------------------------------------------------------
+# Function: `_dedup_legend_items`.
+# Purpose: Handle dedup legend items workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _dedup_legend_items(handles, labels):
+    """Deduplicate legend items while preserving first occurrence order."""
+    out_h = []
+    out_l = []
+    seen = set()
+    for h, l in zip(handles or [], labels or []):
+        txt = '' if l is None else str(l)
+        key = txt.strip()
+        if (not key) or key.startswith('_') or key in seen:
+            continue
+        seen.add(key)
+        out_h.append(h)
+        out_l.append(key)
+    return out_h, out_l
+
+# -----------------------------------------------------------------------------
+# Function: `_auto_line_legend_rows_cap`.
+# Purpose: Handle auto line legend rows cap workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _auto_line_legend_rows_cap(n_items: int) -> int:
+    """Heuristic maximum rows for auto legend layout."""
+    total = max(0, int(n_items))
+    if total <= 8:
+        return 2
+    if total <= 12:
+        return 3
+    if total <= 18:
+        return 4
+    if total <= 24:
+        return 5
+    return 6
+
+# -----------------------------------------------------------------------------
+# Function: `_legend_max_fit_ncol_by_width`.
+# Purpose: Handle legend max fit ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _legend_max_fit_ncol_by_width(fig, labels, width_frac: float, fontsize: float) -> int:
+    """Estimate maximum legend columns that fit within available width."""
+    if fig is None:
+        return max(1, len(labels or []))
+    try:
+        fig_width_px = float(fig.get_figwidth()) * float(fig.dpi) * max(0.10, float(width_frac))
+    except Exception:
+        fig_width_px = 1200.0
+    fig_width_px = max(1.0, float(fig_width_px))
+
+    lbs = [str(lb) for lb in (labels or []) if str(lb).strip()]
+    if not lbs:
+        return 1
+    lens = np.asarray([max(1, len(lb.strip())) for lb in lbs], dtype=float)
+    try:
+        p80 = float(np.nanpercentile(lens, 80))
+    except Exception:
+        p80 = float(np.nanmax(lens))
+    lmean = float(np.nanmean(lens)) if lens.size else 8.0
+    longest = float(np.nanmax(lens)) if lens.size else 8.0
+    ref_chars = max(6.0, min(longest, max(p80, lmean + 2.0)))
+
+    fs = max(1.0, float(fontsize))
+    char_px = fs * float(fig.dpi) / 72.0 * 0.60
+    # Approximate one legend item = label text + marker/handle + padding.
+    item_px = max(72.0, char_px * (ref_chars + 8.0))
+    return max(1, int(fig_width_px // item_px))
+
+# -----------------------------------------------------------------------------
+# Function: `_resolve_line_legend_ncol`.
+# Purpose: Handle resolve line legend ncol workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _resolve_line_legend_ncol(
+    n_items: int,
+    *,
+    fig=None,
+    axes=None,
+    labels=None,
+    fontsize=None,
+    ncol=None,
+    max_rows=None,
+) -> int:
+    """Resolve shared legend ncol from explicit settings or adaptive heuristics."""
+    total = max(0, int(n_items))
+    if total <= 0:
+        return 1
+
+    ncol_fixed = None
+    if ncol is not None:
+        try:
+            ncol_fixed = max(1, int(ncol))
+        except Exception:
+            ncol_fixed = None
+    if ncol_fixed is None:
+        ncol_fixed = _line_top_legend_ncol(None)
+
+    rows_cap = None
+    if max_rows is not None:
+        try:
+            rows_cap = max(1, int(max_rows))
+        except Exception:
+            rows_cap = None
+    if rows_cap is None:
+        rows_cap = _line_top_legend_max_rows(None)
+    if rows_cap is None:
+        rows_cap = _auto_line_legend_rows_cap(total)
+
+    if ncol_fixed is not None:
+        ncol_use = max(1, min(total, int(ncol_fixed)))
+    else:
+        axes_list = _legend_axes_list(fig, axes=axes) if fig is not None else []
+        if not axes_list and fig is not None:
+            axes_list = _legend_axes_list(fig, axes=None)
+        if axes_list:
+            x0, x1, _, _ = _legend_axes_span(axes_list)
+            width_frac = max(0.10, float(x1 - x0))
+        else:
+            width_frac = 0.90
+        try:
+            fs = _FS_LEGEND if fontsize is None else float(fontsize)
+        except Exception:
+            fs = float(_FS_LEGEND)
+        max_fit = _legend_max_fit_ncol_by_width(fig, labels, width_frac, fs)
+        ncol_use = max(1, min(total, int(max_fit)))
+
+    rows_now = int(math.ceil(total / float(max(1, ncol_use))))
+    if rows_now > rows_cap:
+        ncol_need = int(math.ceil(total / float(max(1, rows_cap))))
+        ncol_use = max(1, min(total, max(ncol_use, ncol_need)))
+    return max(1, min(total, int(ncol_use)))
+
+# -----------------------------------------------------------------------------
+# Function: `_place_unified_line_legend`.
+# Purpose: Handle place unified line legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _place_unified_line_legend(fig, axes, handles, labels, *,
+                               fontsize=None, ncol=None, max_rows=None,
+                               top_gap=None, top_margin_extra=None):
+    """Place one figure-level legend with unified runtime-configured layout."""
+    handles_use, labels_use = _dedup_legend_items(handles, labels)
+    if not handles_use or not labels_use:
+        return None
+
+    fs = _LINE_LEGEND_FONTSIZE if (fontsize is None and _LINE_LEGEND_FONTSIZE is not None) else (
+        _FS_LEGEND if fontsize is None else float(fontsize)
+    )
+    ncol_use = _resolve_line_legend_ncol(
+        len(labels_use),
+        fig=fig,
+        axes=axes,
+        labels=labels_use,
+        fontsize=fs,
+        ncol=ncol,
+        max_rows=max_rows,
+    )
+    axes_list = _legend_axes_list(fig, axes=axes)
+    if not axes_list:
+        axes_list = _legend_axes_list(fig, axes=None)
+    x0, x1, y0, _ = _legend_axes_span(axes_list)
+    width = max(0.15, float(x1 - x0))
+
+    legend_pos = str(_LINE_LEGEND_POSITION or 'top').strip().lower()
+    if legend_pos != 'top':
+        n_rows = int(math.ceil(len(labels_use) / float(max(1, ncol_use))))
+        bottom_need = min(
+            0.48,
+            max(0.12, 0.05 + 0.052 * n_rows) + max(0.0, float(_LINE_LEGEND_BOTTOM_MARGIN_EXTRA)),
+        )
+        fig.subplots_adjust(bottom=max(float(fig.subplotpars.bottom), bottom_need))
+        x0, x1, y0, _ = _legend_axes_span(axes_list)
+        width = max(0.15, float(x1 - x0))
+        legend_top = max(
+            0.008,
+            float(y0) - max(0.010, 0.012 + max(0.0, float(_LINE_LEGEND_Y_GAP_EXTRA))),
+        )
+        return fig.legend(
+            handles_use,
+            labels_use,
+            loc='upper left',
+            bbox_to_anchor=(x0, legend_top, width, 0.01),
+            bbox_transform=fig.transFigure,
+            ncol=ncol_use,
+            mode='expand',
+            fontsize=fs,
+            frameon=_LINE_LEGEND_FRAMEON,
+            borderaxespad=0.0,
+            labelspacing=0.35,
+            columnspacing=0.90,
+            handletextpad=0.42,
+        )
+
+    gap = max(0.0, float(_LINE_LEGEND_TOP_GAP if top_gap is None else top_gap))
+    top_extra = max(
+        0.0,
+        float(_LINE_LEGEND_TOP_MARGIN_EXTRA if top_margin_extra is None else top_margin_extra),
+    )
+    top_limit = max(0.68, 0.995 - top_extra)
+    legend = None
+
+    for _ in range(4):
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+        except Exception:
+            renderer = None
+
+        x0, x1, _, _ = _legend_axes_span(axes_list)
+        width = max(0.15, float(x1 - x0))
+        if renderer is not None:
+            tight_top = _legend_axes_tight_top(fig, axes_list, renderer)
+        else:
+            tight_top = _legend_axes_span(axes_list)[3]
+        if not np.isfinite(tight_top):
+            tight_top = _legend_axes_span(axes_list)[3]
+
+        legend_bottom = max(0.0, float(tight_top) + gap)
+        if legend is None:
+            legend = fig.legend(
+                handles_use,
+                labels_use,
+                loc='lower left',
+                bbox_to_anchor=(x0, legend_bottom, width, 0.01),
+                bbox_transform=fig.transFigure,
+                mode='expand',
+                ncol=ncol_use,
+                fontsize=fs,
+                frameon=_LINE_LEGEND_FRAMEON,
+                borderaxespad=0.0,
+                labelspacing=0.35,
+                columnspacing=0.90,
+                handletextpad=0.42,
+            )
+        else:
+            legend.set_bbox_to_anchor((x0, legend_bottom, width, 0.01), transform=fig.transFigure)
+
+        if renderer is None:
+            continue
+        try:
+            fig.canvas.draw()
+            renderer = fig.canvas.get_renderer()
+            leg_bb = legend.get_window_extent(renderer)
+            leg_fig = leg_bb.transformed(fig.transFigure.inverted()) if leg_bb is not None else None
+        except Exception:
+            leg_fig = None
+
+        if leg_fig is None:
+            continue
+
+        if leg_fig.y1 <= top_limit + 1e-4:
+            desired_gap = max(0.006, min(0.030, gap + 0.006))
+            actual_gap = float(leg_fig.y0 - tight_top)
+            if actual_gap > desired_gap + 0.012:
+                legend_bottom -= (actual_gap - desired_gap)
+                legend.set_bbox_to_anchor((x0, legend_bottom, width, 0.01), transform=fig.transFigure)
+            return legend
+
+        overflow = float(leg_fig.y1 - top_limit)
+        new_top = max(0.45, float(fig.subplotpars.top) - overflow - 0.004)
+        if new_top >= float(fig.subplotpars.top) - 1e-4:
+            legend_bottom -= overflow + 0.002
+            legend.set_bbox_to_anchor((x0, legend_bottom, width, 0.01), transform=fig.transFigure)
+            return legend
+        fig.subplots_adjust(top=new_top)
+
+    return legend
+
+# -----------------------------------------------------------------------------
+# Function: `_line_zero_style`.
+# Purpose: Handle line zero style workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_zero_style(*,
                      color: str = 'grey',
                      linestyle: str = '--',
@@ -237,18 +656,33 @@ def _line_zero_style(*,
         'alpha': max(0.0, min(1.0, float(_LINE_ZERO_ALPHA if _LINE_ZERO_ALPHA is not None else alpha))),
     }
 
+# -----------------------------------------------------------------------------
+# Function: `_line_figsize`.
+# Purpose: Handle line figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _line_figsize(width: float, height: float) -> tuple:
     """Return runtime-scaled absolute figure size for line charts."""
     w = max(_LINE_FIG_MIN_WIDTH, float(width) * _LINE_FIG_WIDTH_SCALE)
     h = max(_LINE_FIG_MIN_HEIGHT, float(height) * _LINE_FIG_HEIGHT_SCALE)
     return (w, h)
 
+# -----------------------------------------------------------------------------
+# Function: `_map_abs_figsize`.
+# Purpose: Handle map abs figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _map_abs_figsize(width: float, height: float) -> tuple:
     """Return runtime-scaled absolute figure size for map charts."""
     w = max(_MAP_FIG_MIN_WIDTH, float(width) * _MAP_FIG_WIDTH_SCALE)
     h = max(_MAP_FIG_MIN_HEIGHT, float(height) * _MAP_FIG_HEIGHT_SCALE)
     return (w, h)
 
+# -----------------------------------------------------------------------------
+# Function: `_map_contour_linewidth`.
+# Purpose: Handle map contour linewidth workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _map_contour_linewidth(default: float = 1.0) -> float:
     """Return runtime contour line width for spatial maps."""
     try:
@@ -256,12 +690,22 @@ def _map_contour_linewidth(default: float = 1.0) -> float:
     except Exception:
         return max(0.05, float(default))
 
+# -----------------------------------------------------------------------------
+# Function: `_is_obs_label`.
+# Purpose: Handle is obs label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_obs_label(label) -> bool:
     """Return True when a panel/legend label corresponds to observations."""
     txt = '' if label is None else str(label).strip().lower()
     return txt.startswith('obs')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_is_group_label`.
+# Purpose: Handle is group label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_group_label(label) -> bool:
     """Return True when a label represents a synthetic group-mean dataset."""
     txt = '' if label is None else str(label).strip().lower()
@@ -274,6 +718,11 @@ def _is_group_label(label) -> bool:
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_group_style`.
+# Purpose: Handle group style workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _group_style(group_idx: int = 0) -> dict:
     """Return a dedicated style for group-mean curves."""
     idx = max(0, int(group_idx))
@@ -284,6 +733,11 @@ def _group_style(group_idx: int = 0) -> dict:
         'linewidth': max(_GROUP_LINE_WIDTH, _line_model_width(1.0)),
     }
 
+# -----------------------------------------------------------------------------
+# Function: `_sync_runtime_globals_to_plot_modules`.
+# Purpose: Handle sync runtime globals to plot modules workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sync_runtime_globals_to_plot_modules() -> None:
     """Propagate runtime-updated globals into plotting submodules.
 
@@ -335,6 +789,11 @@ def _sync_runtime_globals_to_plot_modules() -> None:
         '_LINE_LEGEND_FRAMEON',
         '_LINE_LEGEND_Y_GAP_EXTRA',
         '_LINE_LEGEND_BOTTOM_MARGIN_EXTRA',
+        '_LINE_LEGEND_POSITION',
+        '_LINE_LEGEND_NCOL_FIXED',
+        '_LINE_LEGEND_MAX_ROWS',
+        '_LINE_LEGEND_TOP_GAP',
+        '_LINE_LEGEND_TOP_MARGIN_EXTRA',
         '_LINE_SYM_Y_PAD_RATIO',
         '_MAP_COASTLINE_LINEWIDTH',
         '_MAP_LAND_FACECOLOR',
@@ -369,6 +828,11 @@ def _sync_runtime_globals_to_plot_modules() -> None:
             if key in mod_dict and key in src:
                 mod_dict[key] = src[key]
 
+# -----------------------------------------------------------------------------
+# Function: `_normalize_layout_engine`.
+# Purpose: Handle normalize layout engine workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _normalize_layout_engine(value) -> str:
     """Normalize layout-engine option to one of known runtime modes."""
     txt = '' if value is None else str(value).strip().lower()
@@ -378,6 +842,11 @@ def _normalize_layout_engine(value) -> str:
         return txt
     return 'manual'
 
+# -----------------------------------------------------------------------------
+# Function: `configure_plot_runtime`.
+# Purpose: Handle configure plot runtime workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def configure_plot_runtime(*,
                            map_subplot_wspace=None,
                            map_subplot_hspace=None,
@@ -427,6 +896,11 @@ def configure_plot_runtime(*,
                            line_legend_frameon=None,
                            line_legend_y_gap_extra=None,
                            line_legend_bottom_margin_extra=None,
+                           line_legend_position=None,
+                           line_legend_ncol_fixed=None,
+                           line_legend_max_rows=None,
+                           line_legend_top_gap=None,
+                           line_legend_top_margin_extra=None,
                            line_sym_ylim_pad_ratio=None,
                            fs_main_title=None,
                            fs_subplot_title=None,
@@ -453,7 +927,9 @@ def configure_plot_runtime(*,
     global _LINE_GRID_ENABLED, _LINE_GRID_STYLE, _LINE_GRID_COLOR, _LINE_GRID_WIDTH, _LINE_GRID_ALPHA
     global _LINE_DATE_MINTICKS, _LINE_DATE_MAXTICKS, _LINE_MONTH_TICK_INTERVAL, _LINE_MONTH_TICK_ROTATION
     global _LINE_LEGEND_FONTSIZE, _LINE_LEGEND_FRAMEON
-    global _LINE_LEGEND_Y_GAP_EXTRA, _LINE_LEGEND_BOTTOM_MARGIN_EXTRA, _LINE_SYM_Y_PAD_RATIO
+    global _LINE_LEGEND_Y_GAP_EXTRA, _LINE_LEGEND_BOTTOM_MARGIN_EXTRA
+    global _LINE_LEGEND_POSITION, _LINE_LEGEND_NCOL_FIXED, _LINE_LEGEND_MAX_ROWS
+    global _LINE_LEGEND_TOP_GAP, _LINE_LEGEND_TOP_MARGIN_EXTRA, _LINE_SYM_Y_PAD_RATIO
     global _FS_MAIN_TITLE, _FS_SUBPLOT_TITLE, _FS_AXIS_LABEL, _FS_TICK
     global _FS_LEGEND, _FS_CBAR_LABEL, _FS_CBAR_TICK
     global _SAVE_DPI, _SAVE_BBOX_INCHES
@@ -717,6 +1193,35 @@ def configure_plot_runtime(*,
         except Exception:
             pass
 
+    if line_legend_position is not None:
+        txt = str(line_legend_position).strip().lower()
+        if txt in ('top', 'bottom'):
+            _LINE_LEGEND_POSITION = txt
+
+    if line_legend_ncol_fixed is not None:
+        try:
+            _LINE_LEGEND_NCOL_FIXED = max(1, int(line_legend_ncol_fixed))
+        except Exception:
+            pass
+
+    if line_legend_max_rows is not None:
+        try:
+            _LINE_LEGEND_MAX_ROWS = max(1, int(line_legend_max_rows))
+        except Exception:
+            pass
+
+    if line_legend_top_gap is not None:
+        try:
+            _LINE_LEGEND_TOP_GAP = max(0.0, float(line_legend_top_gap))
+        except Exception:
+            pass
+
+    if line_legend_top_margin_extra is not None:
+        try:
+            _LINE_LEGEND_TOP_MARGIN_EXTRA = max(0.0, float(line_legend_top_margin_extra))
+        except Exception:
+            pass
+
     if line_sym_ylim_pad_ratio is not None:
         try:
             _LINE_SYM_Y_PAD_RATIO = max(0.0, float(line_sym_ylim_pad_ratio))
@@ -778,6 +1283,11 @@ def configure_plot_runtime(*,
         _SAVE_BBOX_INCHES = str(save_bbox_inches)
     _sync_runtime_globals_to_plot_modules()
 
+# -----------------------------------------------------------------------------
+# Function: `_mask_model_zeros`.
+# Purpose: Handle mask model zeros workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _mask_model_zeros(field, eps: Optional[float] = None):
     """Mask near-zero values as NaN for model spatial fields."""
     out = np.array(field, dtype=float, copy=True)
@@ -785,12 +1295,22 @@ def _mask_model_zeros(field, eps: Optional[float] = None):
     out[np.isfinite(out) & (np.abs(out) <= tol)] = np.nan
     return out
 
+# -----------------------------------------------------------------------------
+# Function: `_map_figsize`.
+# Purpose: Handle map figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _map_figsize(ncols: int, nrows: int):
     """Return runtime-configurable figsize for map panel grids."""
     c = max(1, int(ncols))
     r = max(1, int(nrows))
     return _map_abs_figsize(c * _MAP_PANEL_WIDTH, r * _MAP_PANEL_HEIGHT)
 
+# -----------------------------------------------------------------------------
+# Function: `_adaptive_grid`.
+# Purpose: Handle adaptive grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _adaptive_grid(N: int) -> tuple:
     """Return (nrows, ncols) with a portrait-first layout preference.
 
@@ -822,12 +1342,22 @@ def _adaptive_grid(N: int) -> tuple:
             best_nrows, best_ncols = nrows, ncols
     return best_nrows, best_ncols
 
+# -----------------------------------------------------------------------------
+# Function: `_model_color`.
+# Purpose: Handle model color workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _model_color(model_idx: int, color=None) -> str:
     """Return model colour from user override or module cycle."""
     if color:
         return color[model_idx % len(color)]
     return COLORS[model_idx % len(COLORS)]
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_monthly_cycle`.
+# Purpose: Handle plot monthly cycle workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_monthly_cycle(ax, values, style, label: str, x=None):
     """Plot a 12-month seasonal cycle with repeated January endpoint."""
     if values is None or np.all(np.isnan(values)):
@@ -836,6 +1366,11 @@ def _plot_monthly_cycle(ax, values, style, label: str, x=None):
     y = np.append(values, values[0])
     ax.plot(x, y, label=label, **style)
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_monthly_cycle`.
+# Purpose: Handle extract monthly cycle workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_monthly_cycle(metric_dict: dict, key_primary: str, key_fallback: str = None):
     """Extract a 12-month climatological cycle using ``metric['uni_mon']``.
 
@@ -896,6 +1431,11 @@ def _extract_monthly_cycle(metric_dict: dict, key_primary: str, key_fallback: st
             out[m_int - 1] = float(vv)
     return out
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_ano_series`.
+# Purpose: Handle extract ano series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_ano_series(metric_dict: dict):
     """Extract a 1-D anomaly time series from a metric dictionary."""
     if not metric_dict:
@@ -903,6 +1443,11 @@ def _extract_ano_series(metric_dict: dict):
     y = metric_dict.get('Vol_ano')
     return np.asarray(y, dtype=float) if y is not None else None
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_trend_slope_pvalue`.
+# Purpose: Handle extract trend slope pvalue workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_trend_slope_pvalue(trend_payload):
     """Return (slope, pvalue) from multiple trend payload formats.
 
@@ -916,12 +1461,22 @@ def _extract_trend_slope_pvalue(trend_payload):
     if trend_payload is None:
         return np.nan, np.nan
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_float`.
+    # Purpose: Handle to float workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _to_float(value):
         try:
             return float(np.asarray(value).squeeze())
         except Exception:
             return np.nan
 
+    # -----------------------------------------------------------------------------
+    # Function: `_extract_from_mapping`.
+    # Purpose: Handle extract from mapping workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _extract_from_mapping(mapping):
         if not isinstance(mapping, dict):
             return np.nan, np.nan
@@ -1015,6 +1570,11 @@ def _extract_trend_slope_pvalue(trend_payload):
             return np.nan, np.nan
     return np.nan, np.nan
 
+# -----------------------------------------------------------------------------
+# Function: `_as_yearmon_pairs`.
+# Purpose: Handle as yearmon pairs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _as_yearmon_pairs(yearmon_payload):
     """Normalize year/month payloads into a list of (year, month) tuples."""
     if yearmon_payload is None:
@@ -1038,6 +1598,11 @@ def _as_yearmon_pairs(yearmon_payload):
             pairs.append((year, month))
     return pairs
 
+# -----------------------------------------------------------------------------
+# Function: `_metric_time_coord`.
+# Purpose: Handle metric time coord workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _metric_time_coord(metric_dict: dict):
     """Return decoded datetime coordinate array from one metric dict."""
     if not metric_dict:
@@ -1053,6 +1618,11 @@ def _metric_time_coord(metric_dict: dict):
         return None
     return np.asarray(t)
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_series_with_dates`.
+# Purpose: Handle extract series with dates workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_series_with_dates(metric_dict: dict, value_key: str,
                                year_range=None, yearmon_list=None):
     """Extract one 1-D series with a best-effort datetime axis."""
@@ -1084,6 +1654,11 @@ def _extract_series_with_dates(metric_dict: dict, value_key: str,
         return np.arange(y.size, dtype=float), y
     return dates, y
 
+# -----------------------------------------------------------------------------
+# Function: `_extract_key_month_series`.
+# Purpose: Handle extract key month series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _extract_key_month_series(metric_dict: dict, value_key: str,
                               month: int, year_range=None):
     """Extract one key-month series robustly from cached or in-memory payloads."""
@@ -1102,6 +1677,16 @@ def _extract_key_month_series(metric_dict: dict, value_key: str,
         use = mask & month_mask
         if np.any(use):
             return np.asarray(dt[use]), y_all[use]
+
+    key_month = _infer_key_month_from_value_key(value_key)
+    if key_month is not None and int(key_month) == month:
+        finite = np.isfinite(y_all)
+        y = y_all[finite] if np.any(finite) else y_all
+        if year_range is not None:
+            years = np.arange(int(year_range[0]), int(year_range[0]) + y.size, dtype=int)
+            dt = pd.to_datetime([f'{yy:04d}-{month:02d}-01' for yy in years], errors='coerce')
+            return np.asarray(dt), y
+        return np.arange(y.size, dtype=float), y
 
     # Fallback for synthetic/padded arrays with one value per target month.
     idx = np.arange(y_all.size)
@@ -1124,6 +1709,24 @@ def _extract_key_month_series(metric_dict: dict, value_key: str,
         return np.asarray(dt), y
     return np.arange(y.size), y
 
+# -----------------------------------------------------------------------------
+# Function: `_infer_key_month_from_value_key`.
+# Purpose: Handle infer key month from value key workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _infer_key_month_from_value_key(value_key: str) -> Optional[int]:
+    """Infer month number from key suffix like ``*_feb``/``*_sep``."""
+    k = str(value_key or '').lower()
+    for mm in range(1, 13):
+        if k.endswith(f'_{_month_tag(mm)}'):
+            return mm
+    return None
+
+# -----------------------------------------------------------------------------
+# Function: `_apply_date_ticks`.
+# Purpose: Handle apply date ticks workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _apply_date_ticks(ax, minticks: Optional[int] = None, maxticks: Optional[int] = None):
     """Apply adaptive date ticks for readable long time ranges."""
     if minticks is None:
@@ -1134,6 +1737,11 @@ def _apply_date_ticks(ax, minticks: Optional[int] = None, maxticks: Optional[int
     ax.xaxis.set_major_locator(locator)
     ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
+# -----------------------------------------------------------------------------
+# Function: `_apply_light_grid`.
+# Purpose: Handle apply light grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _apply_light_grid(ax):
     """Apply a light full-axis grid for time-series readability."""
     if not bool(_LINE_GRID_ENABLED):
@@ -1154,10 +1762,20 @@ def _apply_light_grid(ax):
         alpha=_LINE_GRID_ALPHA,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `_month_cycle_dates`.
+# Purpose: Handle month cycle dates workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _month_cycle_dates():
     """Return a 13-point month axis (Jan..Dec plus repeated Jan)."""
     return pd.date_range('2001-01-01', periods=13, freq='MS')
 
+# -----------------------------------------------------------------------------
+# Function: `_month_tick_positions`.
+# Purpose: Handle month tick positions workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _month_tick_positions(interval: int = 2) -> np.ndarray:
     """Return month tick indices on a Jan..Dec..Jan cycle."""
     step = max(1, int(interval))
@@ -1166,6 +1784,11 @@ def _month_tick_positions(interval: int = 2) -> np.ndarray:
         pos = np.append(pos, 12)
     return pos
 
+# -----------------------------------------------------------------------------
+# Function: `_apply_month_ticks`.
+# Purpose: Handle apply month ticks workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _apply_month_ticks(ax, *, month_dates=None, interval: Optional[int] = None,
                        rotation: Optional[float] = None, use_datetime: bool = True):
     """Apply consistent month ticks such as Jan/Mar/May/.../Jan.
@@ -1198,6 +1821,11 @@ def _apply_month_ticks(ax, *, month_dates=None, interval: Optional[int] = None,
 
     ax.tick_params(axis='x', labelsize=_FS_TICK, rotation=rotation)
 
+# -----------------------------------------------------------------------------
+# Function: `_set_symmetric_ylim`.
+# Purpose: Handle set symmetric ylim workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _set_symmetric_ylim(ax, *, pad_ratio: Optional[float] = None, min_half_span: float = 1e-6):
     """Set y-limits symmetric around zero based on visible line data."""
     if pad_ratio is None:
@@ -1216,6 +1844,11 @@ def _set_symmetric_ylim(ax, *, pad_ratio: Optional[float] = None, min_half_span:
     y_abs_max *= (1.0 + max(0.0, float(pad_ratio)))
     ax.set_ylim(-y_abs_max, y_abs_max)
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_anomaly_timeseries`.
+# Purpose: Handle plot anomaly timeseries workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_anomaly_timeseries(ax, dates, values, style, label: str):
     """Plot anomaly time series."""
     if values is None or np.all(np.isnan(values)):
@@ -1223,6 +1856,11 @@ def _plot_anomaly_timeseries(ax, dates, values, style, label: str):
     ax.plot(dates, values, label=label, **style)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_group_std_band`.
+# Purpose: Handle plot group std band workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_group_std_band(ax, x, mean_values, std_values, style, *,
                          alpha: float = 0.18, zorder: float = 1.0,
                          edge_alpha: float = 0.70, edge_linewidth: float = 0.80):
@@ -1276,6 +1914,11 @@ def _plot_group_std_band(ax, x, mean_values, std_values, style, *,
     except Exception:
         return
 
+# -----------------------------------------------------------------------------
+# Function: `_save_fig`.
+# Purpose: Handle save fig workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _save_fig(fig_name=None, dpi=None, close=True):
     """Save the current figure to disk and optionally close it.
 
@@ -1300,6 +1943,11 @@ def _save_fig(fig_name=None, dpi=None, close=True):
     if close:
         plt.close('all')
 
+# -----------------------------------------------------------------------------
+# Function: `_finite_colorbar_values`.
+# Purpose: Handle finite colorbar values workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _finite_colorbar_values(values) -> np.ndarray:
     """Return finite flattened numeric values for colorbar-range checks."""
     if values is None:
@@ -1316,6 +1964,11 @@ def _finite_colorbar_values(values) -> np.ndarray:
     return arr[np.isfinite(arr)]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_colorbar_extend`.
+# Purpose: Handle resolve colorbar extend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_colorbar_extend(mappable=None, *, data=None, vmin=None, vmax=None, extend='auto') -> str:
     """Resolve colorbar ``extend`` mode strictly from plotted data range.
 
@@ -1371,6 +2024,11 @@ def _resolve_colorbar_extend(mappable=None, *, data=None, vmin=None, vmax=None, 
     return 'neither'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_same_cbar_signature`.
+# Purpose: Handle same cbar signature workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _same_cbar_signature(candidate, reference) -> bool:
     """Return True when two mappables share the same colorbar scale signature."""
     if candidate is reference:
@@ -1398,10 +2056,20 @@ def _same_cbar_signature(candidate, reference) -> bool:
     return (abs(c0 - r0) <= tol) and (abs(c1 - r1) <= tol)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_collect_colorbar_data_from_axes`.
+# Purpose: Handle collect colorbar data from axes workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _collect_colorbar_data_from_axes(mappable, ax_list) -> np.ndarray:
     """Collect finite values from all matching artists in the given axes list."""
     collected: List[np.ndarray] = []
 
+    # -----------------------------------------------------------------------------
+    # Function: `_append_from_artist`.
+    # Purpose: Handle append from artist workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _append_from_artist(artist) -> None:
         if not _same_cbar_signature(artist, mappable):
             return
@@ -1424,6 +2092,67 @@ def _collect_colorbar_data_from_axes(mappable, ax_list) -> np.ndarray:
     return np.concatenate(collected)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_avoid_horizontal_cbar_xtick_overlap`.
+# Purpose: Handle avoid horizontal cbar xtick overlap workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _avoid_horizontal_cbar_xtick_overlap(fig, colorbar, axes, *, min_gap=0.010, min_y=0.018):
+    """Move a horizontal colorbar below xtick-label text when overlap is detected."""
+    if colorbar is None:
+        return
+    if str(getattr(colorbar, 'orientation', '')).lower() != 'horizontal':
+        return
+
+    axes_list = [ax for ax in np.ravel(np.asarray(axes)).tolist() if ax is not None]
+    if not axes_list:
+        return
+
+    try:
+        fig.canvas.draw()
+        renderer = fig.canvas.get_renderer()
+        inv = fig.transFigure.inverted()
+    except Exception:
+        return
+
+    label_boxes = []
+    for ax in axes_list:
+        for tick in ax.get_xticklabels():
+            if not tick.get_visible():
+                continue
+            try:
+                bb = tick.get_window_extent(renderer=renderer)
+                if bb.width <= 0.0 or bb.height <= 0.0:
+                    continue
+                label_boxes.append(bb.transformed(inv))
+            except Exception:
+                continue
+    if not label_boxes:
+        return
+
+    labels_y0 = float(min(bb.y0 for bb in label_boxes))
+    cpos = colorbar.ax.get_position()
+    target_top = labels_y0 - float(min_gap)
+    if cpos.y1 <= target_top:
+        return
+
+    new_y0 = target_top - float(cpos.height)
+    min_y0 = float(min_y)
+    if new_y0 < min_y0:
+        max_height = max(0.010, target_top - min_y0)
+        if max_height < cpos.height:
+            colorbar.ax.set_position([cpos.x0, min_y0, cpos.width, max_height])
+        else:
+            colorbar.ax.set_position([cpos.x0, min_y0, cpos.width, cpos.height])
+    else:
+        colorbar.ax.set_position([cpos.x0, new_y0, cpos.width, cpos.height])
+
+
+# -----------------------------------------------------------------------------
+# Function: `_bottom_cbar`.
+# Purpose: Handle bottom cbar workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _bottom_cbar(fig, mappable, ax_list, label='', extend='auto',
                  fraction=None, pad=None, aspect=None, data=None):
     """Add a horizontal colorbar at the bottom of the figure.
@@ -1467,6 +2196,7 @@ def _bottom_cbar(fig, mappable, ax_list, label='', extend='auto',
     tick_fs = _MAP_CBAR_TICK_FONTSIZE if _MAP_CBAR_TICK_FONTSIZE is not None else _FS_CBAR_TICK
     cb.set_label(label, fontsize=label_fs)
     cb.ax.tick_params(labelsize=tick_fs)
+    _avoid_horizontal_cbar_xtick_overlap(fig, cb, ax_list)
 
     bounds = getattr(cb, 'boundaries', None)
     if bounds is not None:
@@ -1480,6 +2210,11 @@ def _bottom_cbar(fig, mappable, ax_list, label='', extend='auto',
             pass
     return cb
 
+# -----------------------------------------------------------------------------
+# Function: `_place_legend_outside`.
+# Purpose: Handle place legend outside workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _place_legend_outside(ax, location='right', ncol=1, fontsize=None, frameon=None, **kwargs):
     """Place legend outside axes to avoid covering plotted data."""
     fs = _LINE_LEGEND_FONTSIZE if fontsize is None and _LINE_LEGEND_FONTSIZE is not None else (
@@ -1507,6 +2242,11 @@ def _place_legend_outside(ax, location='right', ncol=1, fontsize=None, frameon=N
         fontsize=fs, frameon=use_frameon, **kwargs,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `_finalize_layout`.
+# Purpose: Handle finalize layout workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _finalize_layout(fig, *,
                      right_legend=False,
                      bottom_legend=False,
@@ -1548,6 +2288,11 @@ def _finalize_layout(fig, *,
         pass
     fig.subplots_adjust(wspace=wspace, hspace=hspace)
 
+# -----------------------------------------------------------------------------
+# Function: `_finalize_line_layout`.
+# Purpose: Handle finalize line layout workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _finalize_line_layout(fig, legend_location='none', pad=0.9):
     """Compact layout preset for line charts."""
     _finalize_layout(
@@ -1561,6 +2306,11 @@ def _finalize_line_layout(fig, legend_location='none', pad=0.9):
         hspace=_line_subplot_hspace(0.20),
     )
 
+# -----------------------------------------------------------------------------
+# Function: `_finalize_map_layout`.
+# Purpose: Handle finalize map layout workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _finalize_map_layout(fig, has_bottom_cbar=True, pad=0.8):
     """Compact layout preset for map panels."""
     _finalize_layout(
@@ -1573,6 +2323,11 @@ def _finalize_map_layout(fig, has_bottom_cbar=True, pad=0.8):
         wspace=_MAP_SUBPLOT_WSPACE, hspace=_MAP_SUBPLOT_HSPACE,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `_month_tag`.
+# Purpose: Handle month tag workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _month_tag(month: int) -> str:
     """Return lowercase month tag used in key-month figure names."""
     mapping = {
@@ -1581,6 +2336,11 @@ def _month_tag(month: int) -> str:
     }
     return mapping.get(int(month), f'm{int(month):02d}')
 
+# -----------------------------------------------------------------------------
+# Function: `_open_nc_ref`.
+# Purpose: Handle open nc ref workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _open_nc_ref(nc_ref: str):
     """Open a NetCDF reference in either plain or grouped form.
 
@@ -1603,6 +2363,11 @@ def _open_nc_ref(nc_ref: str):
         kwargs['group'] = group
     return xr.open_dataset(path, **kwargs)
 
+# -----------------------------------------------------------------------------
+# Function: `polar_map`.
+# Purpose: Handle polar map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def polar_map(hms, ax):
     """Configure a Cartopy axes with polar-stereographic base map features.
 

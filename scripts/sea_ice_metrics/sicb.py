@@ -45,6 +45,11 @@ class SICBMetrics(SeaIceMetricsBase):
         metric (str): Statistical metric for comparisons ('MAE', 'RMSE', etc.).
     """
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, date_start: str, date_end: str,
                  hemisphere: str, metric: str = 'MAE'):
         """
@@ -75,6 +80,11 @@ class SICBMetrics(SeaIceMetricsBase):
         except ValueError as e:
             raise ValueError(f"Invalid date format. Use 'YYYY-MM-DD'. Error: {e}")
 
+    # -----------------------------------------------------------------------------
+    # Function: `Cal_SIC_budget`.
+    # Purpose: Handle Cal SIC budget workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def Cal_SIC_budget(self, sic_file: str, sic_key: str, u_file: str, u_key: str, v_file: str, v_key: str,
                        hemisphere: str,
                        rotate: bool = False,
@@ -151,6 +161,11 @@ class SICBMetrics(SeaIceMetricsBase):
             expected_ridging = 1
             expected_common_valid = int(_SICB_COMMON_VALID_AGGREGATION)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_read_flag`.
+            # Purpose: Handle read flag workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _read_flag(path: str, key: str, default: int = 0) -> int:
                 try:
                     with xr.open_dataset(path) as ds_tmp:
@@ -210,6 +225,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return seas_clim_file, mon_clim_file
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calculate_daily_budget_components`.
+    # Purpose: Handle calculate daily budget components workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _calculate_daily_budget_components(self, sic_file: str, sic_key: str, u_file: str, u_key: str, v_file: str, v_key: str,
                                            rotate: bool,
                                            ngrid_filter: int, sic_threshold: int,
@@ -298,11 +318,21 @@ class SICBMetrics(SeaIceMetricsBase):
 
             time_values = np.array(ds_sic['time'].values)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_label_time`.
+            # Purpose: Handle label time workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _label_time(tt: int) -> str:
                 if 0 <= tt < len(time_values):
                     return str(time_values[tt])[:10]
                 return str(tt)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_process_range`.
+            # Purpose: Handle process range workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _process_range(tt_start: int, tt_end: int) -> Tuple[int, int]:
                 """Process one contiguous timestep block [tt_start, tt_end)."""
                 processed = 0
@@ -429,6 +459,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return output_file
 
+    # -----------------------------------------------------------------------------
+    # Function: `_write_dataset_atomic`.
+    # Purpose: Handle write dataset atomic workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _write_dataset_atomic(ds_out: xr.Dataset, output_file: str, retries: int = 3, backoff_s: float = 1.0) -> None:
         """Write one NetCDF file atomically with retry on transient permission errors.
@@ -484,6 +519,11 @@ class SICBMetrics(SeaIceMetricsBase):
                     os.remove(tmp_path)
                 raise
 
+    # -----------------------------------------------------------------------------
+    # Function: `_create_budget_dataset`.
+    # Purpose: Handle create budget dataset workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _create_budget_dataset(self, ds_sic: xr.Dataset, sic: np.ndarray,
                                dadt: np.ndarray, adv: np.ndarray,
                                div: np.ndarray, res: np.ndarray,
@@ -544,6 +584,11 @@ class SICBMetrics(SeaIceMetricsBase):
         self._write_dataset_atomic(ds_out, output_file)
         return output_file
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calculate_climatologies`.
+    # Purpose: Handle calculate climatologies workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _calculate_climatologies(
         self,
         daily_file: str,
@@ -563,6 +608,11 @@ class SICBMetrics(SeaIceMetricsBase):
         season_order = ['DJF', 'MAM', 'JJA', 'SON']
         month_order = np.arange(1, 13, dtype=np.int16)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_scale_sum_by_valid_count`.
+        # Purpose: Handle scale sum by valid count workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _scale_sum_by_valid_count(
             ds_sum: xr.Dataset,
             ds_count: xr.Dataset,
@@ -582,6 +632,11 @@ class SICBMetrics(SeaIceMetricsBase):
             ds_out = xr.Dataset(out_vars, coords=ds_sum.coords, attrs=ds_sum.attrs)
             return ds_out
 
+        # -----------------------------------------------------------------------------
+        # Function: `_build_and_write`.
+        # Purpose: Handle build and write workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _build_and_write(ds_daily: xr.Dataset) -> None:
             """Build seasonal/monthly climatologies from an opened dataset."""
             budget_vars = [v for v in ('dadt', 'adv', 'div', 'res') if v in ds_daily.data_vars]
@@ -604,6 +659,11 @@ class SICBMetrics(SeaIceMetricsBase):
                 for vname in common_terms:
                     ds_budget_daily[vname] = ds_budget_daily[vname].where(common_valid)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_seasonal_mean_climatology`.
+            # Purpose: Handle seasonal mean climatology workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _seasonal_mean_climatology(da: xr.DataArray) -> xr.DataArray:
                 out = da.resample(time='QS-DEC').mean(skipna=True, keep_attrs=True)
                 out = out.groupby('time.season').mean(dim='time', skipna=True, keep_attrs=True)
@@ -612,6 +672,11 @@ class SICBMetrics(SeaIceMetricsBase):
                 out = out.assign_coords(time=np.arange(1, 5, dtype=np.int16))
                 return out
 
+            # -----------------------------------------------------------------------------
+            # Function: `_monthly_mean_climatology`.
+            # Purpose: Handle monthly mean climatology workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _monthly_mean_climatology(da: xr.DataArray) -> xr.DataArray:
                 out = da.resample(time='MS').mean(skipna=True, keep_attrs=True)
                 out = out.groupby('time.month').mean(dim='time', skipna=True, keep_attrs=True)
@@ -796,6 +861,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return seas_clim_file, mon_clim_file
 
+    # -----------------------------------------------------------------------------
+    # Function: `SICB_1M_metrics`.
+    # Purpose: Handle SICB 1M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SICB_1M_metrics(self, sicb_file):
         """
         Purpose
@@ -847,7 +917,7 @@ class SICBMetrics(SeaIceMetricsBase):
         if self.cell_area.shape != dadt[0, :, :].shape:
             raise ValueError(f"Grid cell area and budget data must have same spatial dimensions.")
 
-        nt, nx, ny = dadt.shape
+        nt, _, _ = dadt.shape
 
         # Main calculation logic integrated here
         dadt_sum = np.full(nt, np.nan)
@@ -884,6 +954,11 @@ class SICBMetrics(SeaIceMetricsBase):
             'res_psum': res_psum, 'res_nsum': res_nsum, 'res_sum': res_sum, 'res_p': res_p
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `_integrate_positive_negative`.
+    # Purpose: Handle integrate positive negative workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _integrate_positive_negative(self, data: np.ndarray, sign: str) -> float:
         """Calculate area integral of positive or negative values."""
         if sign == '+':
@@ -898,6 +973,11 @@ class SICBMetrics(SeaIceMetricsBase):
         else:
             return 0.0
 
+    # -----------------------------------------------------------------------------
+    # Function: `summarize_budget_closure`.
+    # Purpose: Handle summarize budget closure workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def summarize_budget_closure(self, mon_clim_file: str,
                                 dataset_name: Optional[str] = None) -> Dict[str, float]:
         """Summarize SICB annual budget closure terms for one monthly climatology file.
@@ -912,12 +992,22 @@ class SICBMetrics(SeaIceMetricsBase):
         10^6 km^2/month.
         """
 
+        # -----------------------------------------------------------------------------
+        # Function: `_to_3d`.
+        # Purpose: Handle to 3d workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _to_3d(field: xr.DataArray) -> np.ndarray:
             arr = np.array(field, dtype=float)
             if arr.ndim == 2:
                 arr = arr[np.newaxis, ...]
             return arr
 
+        # -----------------------------------------------------------------------------
+        # Function: `_annual_integrated_million_km2`.
+        # Purpose: Handle annual integrated million km2 workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _annual_integrated_million_km2(term_3d: np.ndarray) -> float:
             ntime = term_3d.shape[0]
             monthly_vals = np.full((ntime,), np.nan)
@@ -964,6 +1054,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return row
 
+    # -----------------------------------------------------------------------------
+    # Function: `summarize_seasonal_budget_table`.
+    # Purpose: Handle summarize seasonal budget table workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def summarize_seasonal_budget_table(self, seas_clim_file: str,
                                        dataset_name: Optional[str] = None,
                                        sector: str = 'All') -> Dict[str, Dict[str, float]]:
@@ -979,6 +1074,11 @@ class SICBMetrics(SeaIceMetricsBase):
             sector=sector,
         )
 
+        # -----------------------------------------------------------------------------
+        # Function: `_integrated_total`.
+        # Purpose: Handle integrated total workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _integrated_total(term_map: np.ndarray) -> float:
             valid = np.isfinite(term_map) & np.isfinite(self.cell_area_km2) & sec_index
             if not np.any(valid):
@@ -1051,6 +1151,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `summarize_budget_components`.
+    # Purpose: Handle summarize budget components workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def summarize_budget_components(self, obs_mon_clim_file: str, target_mon_clim_file: str,
                                     aggregate: str = 'annual') -> List[Dict[str, float]]:
         """Summarize SICB component statistics for scalar table output.
@@ -1072,6 +1177,11 @@ class SICBMetrics(SeaIceMetricsBase):
         - Res is defined as closure residual: dadt - dyn - therm.
         """
 
+        # -----------------------------------------------------------------------------
+        # Function: `_collapse_to_map`.
+        # Purpose: Handle collapse to map workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _collapse_to_map(field: xr.DataArray) -> np.ndarray:
             if 'time' not in field.dims:
                 return np.array(field, dtype=float)
@@ -1082,6 +1192,11 @@ class SICBMetrics(SeaIceMetricsBase):
                 return np.array(by_season.mean(dim='season', skipna=True), dtype=float)
             raise ValueError("aggregate must be 'annual' or 'seasonal'.")
 
+        # -----------------------------------------------------------------------------
+        # Function: `_weighted_corr`.
+        # Purpose: Handle weighted corr workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _weighted_corr(a: np.ndarray, b: np.ndarray, w: np.ndarray) -> float:
             valid = np.isfinite(a) & np.isfinite(b) & np.isfinite(w)
             if np.sum(valid) < 2:
@@ -1103,6 +1218,11 @@ class SICBMetrics(SeaIceMetricsBase):
                 return np.nan
             return float(cov / np.sqrt(vx * vy))
 
+        # -----------------------------------------------------------------------------
+        # Function: `_integrated_series_million_km2`.
+        # Purpose: Handle integrated series million km2 workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _integrated_series_million_km2(field: xr.DataArray) -> np.ndarray:
             arr = np.array(field, dtype=float)
             if arr.ndim == 2:
@@ -1146,6 +1266,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         return rows
 
+    # -----------------------------------------------------------------------------
+    # Function: `SICB_2M_metrics`.
+    # Purpose: Handle SICB 2M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SICB_2M_metrics(self, sicb1_file: str, sicb2_file: str) -> Dict[str, Union[float, np.ndarray]]:
         """
         Purpose
@@ -1191,7 +1316,7 @@ class SICBMetrics(SeaIceMetricsBase):
                              f'\n\tshape of dadt1: {dadt1.shape}'
                              f'\n\tshape of cell_area: {self.cell_area.shape}')
 
-        nt, nx, ny = dadt1.shape
+        nt, _, _ = dadt1.shape
 
         # === Calculate SIC budget metrics ===
         dadt_diff = np.full((nt,), np.nan)

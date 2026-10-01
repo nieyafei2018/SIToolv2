@@ -33,7 +33,7 @@ variables:
       - IPSL-CM6A-LR
       - IPSL-CM6A-LR-INCA
       - MRI-ESM2-0
-
+    model_mean_groups: {}
   ##################
   #     SIconc     #
   ##################

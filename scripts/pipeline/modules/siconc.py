@@ -10,11 +10,22 @@ from scripts.config import DAYS_PER_MONTH
 from scripts.pipeline.modules.common import (
     _apply_plot_runtime_options,
     _check_outputs_exist,
+    _heatmap_main_adjust,
+    _heatmap_main_cbar_kwargs,
+    _heatmap_main_figsize,
+    _heatmap_seasonal_adjust,
+    _heatmap_seasonal_cbar_kwargs,
+    _heatmap_seasonal_figsize,
     _load_plot_options,
     _plot_options_get_module,
 )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_season_months`.
+# Purpose: Handle siconc season months workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     """Return canonical season -> month mapping for one hemisphere."""
     h = str(hemisphere or '').lower()
@@ -33,10 +44,20 @@ def _siconc_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_month_weights`.
+# Purpose: Handle siconc month weights workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_month_weights(months: Tuple[int, ...]) -> np.ndarray:
     return np.asarray([float(DAYS_PER_MONTH[int(m) - 1]) for m in months], dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_matrix_seasonal_mean`.
+# Purpose: Handle siconc matrix seasonal mean workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_matrix_seasonal_mean(field_mon: np.ndarray, months: Tuple[int, ...]) -> np.ndarray:
     """Weighted seasonal mean map from 12-month climatology fields."""
     arr = np.asarray(field_mon, dtype=float)
@@ -52,6 +73,11 @@ def _siconc_matrix_seasonal_mean(field_mon: np.ndarray, months: Tuple[int, ...])
     return np.nansum(vals * w[:, None, None], axis=0) / np.sum(w)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_season_group_indices`.
+# Purpose: Handle siconc season group indices workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_season_group_indices(n_time: int, months: Tuple[int, ...]) -> Dict[int, List[int]]:
     """Group monthly indices into season-years."""
     month_tuple = tuple(int(m) for m in months)
@@ -67,6 +93,11 @@ def _siconc_season_group_indices(n_time: int, months: Tuple[int, ...]) -> Dict[i
     return grouped
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_seasonal_mean_series`.
+# Purpose: Handle siconc seasonal mean series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_seasonal_mean_series(series: np.ndarray, months: Tuple[int, ...]) -> np.ndarray:
     """Return seasonal mean series (weighted by month lengths)."""
     arr = np.asarray(series, dtype=float).reshape(-1)
@@ -92,6 +123,11 @@ def _siconc_seasonal_mean_series(series: np.ndarray, months: Tuple[int, ...]) ->
     return np.asarray(out, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_series_skill`.
+# Purpose: Handle siconc series skill workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_series_skill(ref: np.ndarray, cmp: np.ndarray) -> Tuple[float, float]:
     """Return (Corr, RMSE) between two paired 1-D series."""
     y1 = np.asarray(ref, dtype=float).reshape(-1)
@@ -113,6 +149,11 @@ def _siconc_series_skill(ref: np.ndarray, cmp: np.ndarray) -> Tuple[float, float
     return float(corr) if np.isfinite(corr) else np.nan, float(rmse) if np.isfinite(rmse) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_series_trend_per_decade`.
+# Purpose: Handle siconc series trend per decade workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_series_trend_per_decade(series: np.ndarray) -> float:
     """Linear trend (per decade) for one annual/seasonal time series."""
     yy = np.asarray(series, dtype=float).reshape(-1)
@@ -127,6 +168,11 @@ def _siconc_series_trend_per_decade(series: np.ndarray) -> float:
     return slope * 10.0 if np.isfinite(slope) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_weighted_monthly_clim_value`.
+# Purpose: Handle siconc weighted monthly clim value workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_weighted_monthly_clim_value(monthly_vals: np.ndarray, months: Tuple[int, ...]) -> float:
     """Weighted mean over selected months from a 12-month climatology series."""
     arr = np.asarray(monthly_vals, dtype=float).reshape(-1)
@@ -147,6 +193,11 @@ def _siconc_weighted_monthly_clim_value(monthly_vals: np.ndarray, months: Tuple[
     return float(np.nansum(vals * wts) / np.sum(wts))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_seasonal_products`.
+# Purpose: Handle siconc seasonal products workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_seasonal_products(metric_dict: Optional[dict], season: str, hemisphere: str) -> Dict[str, Any]:
     """Build seasonal diagnostics (clim/std/trend maps + SIE/SIA series)."""
     out: Dict[str, Any] = {
@@ -208,6 +259,11 @@ def _siconc_seasonal_products(metric_dict: Optional[dict], season: str, hemisphe
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_extract_season_pair_stats`.
+# Purpose: Handle siconc extract season pair stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_extract_season_pair_stats(
     ref_metric: Optional[dict],
     cmp_metric: Optional[dict],
@@ -215,7 +271,7 @@ def _siconc_extract_season_pair_stats(
     season: str,
     hemisphere: str,
 ) -> Dict[str, float]:
-    """Return Lin et al.-style seasonal diff stats for one pair."""
+    """Return seasonal diff stats for one pair."""
     d1 = _siconc_seasonal_products(ref_metric, season, hemisphere)
     d2 = _siconc_seasonal_products(cmp_metric, season, hemisphere)
     c1 = np.asarray(d1.get('clim_map', np.array([])), dtype=float)
@@ -255,7 +311,10 @@ def _siconc_extract_season_pair_stats(
     if sie1.size > 0 and sie2.size > 0:
         out['SIE_MeanDiff'] = abs(float(np.nanmean(sie1)) - float(np.nanmean(sie2)))
     if sie_ano1.size > 0 and sie_ano2.size > 0:
-        out['SIE_StdDiff'] = abs(float(np.nanstd(sie_ano1)) - float(np.nanstd(sie_ano2)))
+        _sd1 = utils.detrended_std_1d(sie_ano1)
+        _sd2 = utils.detrended_std_1d(sie_ano2)
+        if np.isfinite(_sd1) and np.isfinite(_sd2):
+            out['SIE_StdDiff'] = abs(float(_sd1) - float(_sd2))
         _tr1 = _siconc_series_trend_per_decade(sie_ano1)
         _tr2 = _siconc_series_trend_per_decade(sie_ano2)
         if np.isfinite(_tr1) and np.isfinite(_tr2):
@@ -263,7 +322,10 @@ def _siconc_extract_season_pair_stats(
     if sia1.size > 0 and sia2.size > 0:
         out['SIA_MeanDiff'] = abs(float(np.nanmean(sia1)) - float(np.nanmean(sia2)))
     if sia_ano1.size > 0 and sia_ano2.size > 0:
-        out['SIA_StdDiff'] = abs(float(np.nanstd(sia_ano1)) - float(np.nanstd(sia_ano2)))
+        _sd1 = utils.detrended_std_1d(sia_ano1)
+        _sd2 = utils.detrended_std_1d(sia_ano2)
+        if np.isfinite(_sd1) and np.isfinite(_sd2):
+            out['SIA_StdDiff'] = abs(float(_sd1) - float(_sd2))
         _tr1 = _siconc_series_trend_per_decade(sia_ano1)
         _tr2 = _siconc_series_trend_per_decade(sia_ano2)
         if np.isfinite(_tr1) and np.isfinite(_tr2):
@@ -283,6 +345,11 @@ def _siconc_extract_season_pair_stats(
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `eval_sic`.
+# Purpose: Handle eval sic workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sic(case_name: str, recipe: RR.RecipeReader,
              data_dir: str, output_dir: str,
              recalculate: bool = False,
@@ -366,7 +433,8 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
     model_paths: List[str] = []
     cached_obs_files: List[str] = []
     cached_model_files: List[str] = []
-    model_labels = _get_recipe_model_labels(module, module_vars, len(module_vars.get('model_file') or []))
+    expected_model_count = len(module_vars.get('model_file') or [])
+    model_labels = _get_recipe_model_labels(module, module_vars, expected_model_count)
     obs_labels = _get_reference_labels(module_vars, hemisphere)
     obs1_plot_label = obs_labels[0] if len(obs_labels) >= 1 else 'obs1'
     obs2_plot_label = obs_labels[1] if len(obs_labels) >= 2 else 'obs2'
@@ -398,16 +466,29 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 ]
                 if not model_labels and model_dicts:
                     model_labels = _get_recipe_model_labels(module, module_vars, len(model_dicts))
-                cache_loaded = obs_dict is not None and len(model_dicts) == len(diff_dicts)
+                cache_has_expected_models = (
+                    expected_model_count == 0 or len(model_dicts) > 0
+                )
+                cache_loaded = (
+                    obs_dict is not None
+                    and len(model_dicts) == len(diff_dicts)
+                    and cache_has_expected_models
+                )
                 if cache_loaded:
                     logger.info("Loaded %s metrics from cache: %s", module, cache_file)
+                elif expected_model_count > 0 and not model_dicts:
+                    logger.info(
+                        "Ignoring %s cache without model records; recipe declares %d model(s).",
+                        module, expected_model_count,
+                    )
             except Exception as exc:
                 logger.warning("Cache payload for %s is incomplete (%s). Recalculating.", module, exc)
                 cache_loaded = False
 
     if not cache_loaded:
         grid_file, obs_files, model_files = _run_preprocessing(
-            case_name, module, recipe, data_dir, frequency='monthly', jobs=jobs
+            case_name, module, recipe, data_dir, frequency='monthly',
+            overwrite_models=recalculate, jobs=jobs
         )
         if not obs_files:
             logger.error("No observation files available for %s - skipping.", module)
@@ -433,6 +514,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         if jobs > 1 and model_files:
             stage_dir = _get_stage_dir(case_name, output_dir, hemisphere, module)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_worker`.
+            # Purpose: Handle worker workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _worker(task: Tuple[int, str]) -> Dict[str, Any]:
                 idx, mf = task
                 local_metrics = SIM.SIconcMetrics(grid_file=grid_file, hemisphere=hemisphere, metric=metric)
@@ -559,7 +645,14 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             model_dicts_plot = [records[r] for r in model_records_plot if r in records]
             diff_dicts_plot = [records[r] for r in diff_records_plot if r in records]
             has_obs2_plot = bool(cached_for_plot.get('has_obs2'))
-            if obs_dict_plot is not None and len(model_dicts_plot) == len(diff_dicts_plot):
+            plot_cache_has_expected_models = (
+                expected_model_count == 0 or len(model_dicts_plot) > 0
+            )
+            if (
+                obs_dict_plot is not None
+                and len(model_dicts_plot) == len(diff_dicts_plot)
+                and plot_cache_has_expected_models
+            ):
                 obs_dict = obs_dict_plot
                 obs_dict2 = records.get('obs2_1m') if has_obs2_plot else None
                 obs_diff_dict = records.get('obs2_vs_obs1_2m') if has_obs2_plot else None
@@ -567,6 +660,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 diff_dicts = diff_dicts_plot
                 model_labels = cached_for_plot.get('model_labels', model_labels) or model_labels
                 logger.info("Using cache-backed %s payload for plotting: %s", module, cache_file)
+            elif expected_model_count > 0 and not model_dicts_plot:
+                logger.info(
+                    "Skipping cache-backed %s plotting payload without model records; recipe declares %d model(s).",
+                    module, expected_model_count,
+                )
         except Exception as exc:
             logger.warning("Failed to reload %s cache for plotting (%s). Using in-memory payload.", module, exc)
 
@@ -635,7 +733,8 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         if not obs_paths or (not model_paths and model_dicts):
             try:
                 _, obs_files_reg, model_files_reg = _run_preprocessing(
-                    case_name, module, recipe, data_dir, frequency='monthly', jobs=jobs
+                    case_name, module, recipe, data_dir, frequency='monthly',
+                    overwrite_models=recalculate, jobs=jobs
                 )
                 obs_paths = [os.path.join(data_dir, f) for f in obs_files_reg[:2]]
                 model_paths = [os.path.join(data_dir, f) for f in model_files_reg]
@@ -649,12 +748,18 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
 
     logger.info("Generating figures ...")
     fig_dir.mkdir(parents=True, exist_ok=True)
+    # Remove legacy PNGs from previous naming schemes to avoid mixed HTML listing.
+    for _stale_png in fig_dir.glob('*.png'):
+        try:
+            _stale_png.unlink()
+        except Exception:
+            continue
 
     obs_list_for_ts = [obs_dict] + ([obs_dict2] if obs_dict2 is not None else [])
     base_labels_for_ts = [obs1_plot_label] + ([obs2_plot_label] if obs_dict2 is not None else []) + base_model_labels_for_group
     pf.plot_SIC_ts(obs_list_for_ts, base_model_dicts_for_ts,
                    base_labels_for_ts,
-                   str(fig_dir / 'SIC_ts.png'),
+                   str(fig_dir / 'siconc_sic_ts_raw.png'),
                    line_style=line_styles, color=line_colors)
 
     pf.plot_SIC_ano(
@@ -662,7 +767,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         base_model_dicts_for_ts,
         base_labels_for_ts,
         year_range,
-        str(fig_dir / 'SIC_ano.png'),
+        str(fig_dir / 'siconc_sic_ano_ts_raw.png'),
         hms=hemisphere,
         line_style=line_styles,
         color=line_colors,
@@ -675,7 +780,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             base_model_dicts_for_ts,
             base_labels_for_ts,
             year_range=year_range, month=month, hms=hemisphere,
-            fig_name=str(fig_dir / f'siconc_ano_timeseries_{mtag}.png'),
+            fig_name=str(fig_dir / f'siconc_sic_ano_ts_{mtag}_raw.png'),
             line_style=line_styles,
             color=line_colors,
             legend_y_gap=key_month_legend_gap,
@@ -683,7 +788,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
 
     pf.plot_IIEE_ts(
         base_diff_dicts_for_ts, base_model_labels_for_group,
-        str(fig_dir / 'IIEE_ts.png'),
+        str(fig_dir / 'siconc_iiee_ts_diff.png'),
         obs_uncertainty=obs_diff_dict,
         obs_uncertainty_label=f'{obs2_plot_label}-{obs1_plot_label}',
         obs_count=(2 if obs_dict2 is not None else 1),
@@ -698,7 +803,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             obs_list_for_ts,
             group_model_means_for_ts,
             group_labels_obs,
-            str(fig_dir / 'SIC_ts_groupmean.png'),
+            str(fig_dir / 'siconc_sic_ts_groupmean_raw.png'),
             line_style=line_styles,
             color=line_colors,
             model_spread_payloads=group_model_stds_for_ts,
@@ -708,7 +813,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             group_model_means_for_ts,
             group_labels_obs,
             year_range,
-            str(fig_dir / 'SIC_ano_groupmean.png'),
+            str(fig_dir / 'siconc_sic_ano_ts_groupmean_raw.png'),
             hms=hemisphere,
             line_style=line_styles,
             color=line_colors,
@@ -723,7 +828,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 year_range=year_range,
                 month=month,
                 hms=hemisphere,
-                fig_name=str(fig_dir / f'siconc_ano_timeseries_{mtag}_groupmean.png'),
+                fig_name=str(fig_dir / f'siconc_sic_ano_ts_{mtag}_groupmean_raw.png'),
                 line_style=line_styles,
                 color=line_colors,
                 legend_y_gap=key_month_legend_gap,
@@ -733,7 +838,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             pf.plot_IIEE_ts(
                 group_diff_means_for_ts,
                 group_labels_for_ts,
-                str(fig_dir / 'IIEE_ts_groupmean.png'),
+                str(fig_dir / 'siconc_iiee_ts_groupmean_diff.png'),
                 obs_uncertainty=obs_diff_dict,
                 obs_uncertainty_label=f'{obs2_plot_label}-{obs1_plot_label}',
                 obs_count=(2 if obs_dict2 is not None else 1),
@@ -753,13 +858,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         grid_file, sic_maps, _sic_labels, hemisphere,
         sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
         sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-        plot_mode='raw', fig_name=str(fig_dir / 'SIC_map_raw.png'),
+        plot_mode='raw', fig_name=str(fig_dir / 'siconc_sic_mean_map_raw.png'),
     )
     pf.plot_SIC_map(
         grid_file, sic_maps, _sic_labels, hemisphere,
         sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
         sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-        plot_mode='diff', fig_name=str(fig_dir / 'SIC_map_diff.png'),
+        plot_mode='diff', fig_name=str(fig_dir / 'siconc_sic_mean_map_diff.png'),
     )
 
     logger.info("Generating anomaly standard deviation maps ...")
@@ -772,13 +877,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         grid_file, sic_std_maps, _sic_labels, hemisphere,
         sic_range=[0, 30], diff_range=[-15, 15],
         sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-        plot_mode='raw', fig_name=str(fig_dir / 'SIC_std_map_raw.png'),
+        plot_mode='raw', fig_name=str(fig_dir / 'siconc_sic_dstd_map_raw.png'),
     )
     pf.plot_SIC_map(
         grid_file, sic_std_maps, _sic_labels, hemisphere,
         sic_range=[0, 30], diff_range=[-15, 15],
         sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-        plot_mode='diff', fig_name=str(fig_dir / 'SIC_std_map_diff.png'),
+        plot_mode='diff', fig_name=str(fig_dir / 'siconc_sic_dstd_map_diff.png'),
     )
 
     logger.info("Generating trend maps ...")
@@ -799,14 +904,14 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
         _sic_labels, hemisphere,
         trend_range=[-_trend_range, _trend_range],
         cmap=trend_cmap, unit='%/decade',
-        plot_mode='raw', fig_name=str(fig_dir / 'SIC_trend_map_raw.png'),
+        plot_mode='raw', fig_name=str(fig_dir / 'siconc_sic_trend_map_raw.png'),
     )
     pf.plot_trend_map(
         grid_file, sic_trend_maps, sic_pvalue_maps,
         _sic_labels, hemisphere,
         trend_range=[-_trend_range, _trend_range],
         cmap=trend_cmap, unit='%/decade',
-        plot_mode='diff', fig_name=str(fig_dir / 'SIC_trend_map_diff.png'),
+        plot_mode='diff', fig_name=str(fig_dir / 'siconc_sic_trend_map_diff.png'),
     )
 
     for month in key_months:
@@ -820,13 +925,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             grid_file, _clim_maps, _sic_labels, hemisphere,
             sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
             sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-            plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_clim_{mtag}_{hemisphere}_raw.png'),
+            plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_clim_map_{mtag}_{hemisphere}_raw.png'),
         )
         pf.plot_SIC_map(
             grid_file, _clim_maps, _sic_labels, hemisphere,
             sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
             sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-            plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_clim_{mtag}_{hemisphere}_diff.png'),
+            plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_clim_map_{mtag}_{hemisphere}_diff.png'),
         )
 
         _std_maps = np.array(
@@ -838,13 +943,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             grid_file, _std_maps, _sic_labels, hemisphere,
             sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
             sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-            plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_std_{mtag}_{hemisphere}_raw.png'),
+            plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_dstd_map_{mtag}_{hemisphere}_raw.png'),
         )
         pf.plot_SIC_map(
             grid_file, _std_maps, _sic_labels, hemisphere,
             sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
             sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-            plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_std_{mtag}_{hemisphere}_diff.png'),
+            plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_dstd_map_{mtag}_{hemisphere}_diff.png'),
         )
 
         _tr_maps = np.array(
@@ -861,19 +966,24 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             _sic_labels, hemisphere,
             trend_range=[-_tr_max, _tr_max],
             cmap=trend_cmap, unit='%/decade',
-            plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_trend_{mtag}_{hemisphere}_raw.png'),
+            plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_trend_map_{mtag}_{hemisphere}_raw.png'),
         )
         pf.plot_trend_map(
             grid_file, _tr_maps, _tr_pval_maps,
             _sic_labels, hemisphere,
             trend_range=[-_tr_max, _tr_max],
             cmap=trend_cmap, unit='%/decade',
-            plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_trend_{mtag}_{hemisphere}_diff.png'),
+            plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_trend_map_{mtag}_{hemisphere}_diff.png'),
         )
 
     _season_names = ['Spring', 'Summer', 'Autumn', 'Winter']
     _sic_metric_maps = [obs_dict] + ([obs_dict2] if obs_dict2 is not None else []) + model_dicts
 
+    # -----------------------------------------------------------------------------
+    # Function: `_stack_siconc_season_maps`.
+    # Purpose: Handle stack siconc season maps workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _stack_siconc_season_maps(diag_list: List[Dict[str, Any]], key: str) -> Optional[np.ndarray]:
         arrs = [np.asarray(d.get(key, np.array([])), dtype=float) for d in diag_list]
         if not arrs or any(a.ndim != 2 for a in arrs):
@@ -894,13 +1004,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 grid_file, _clim_maps, _sic_labels, hemisphere,
                 sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
                 sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-                plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_clim_{_season}_{hemisphere}_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_clim_map_{_season}_{hemisphere}_raw.png'),
             )
             pf.plot_SIC_map(
                 grid_file, _clim_maps, _sic_labels, hemisphere,
                 sic_range=[0, 100], diff_range=[-50, 50], unit='Sea Ice Concentration (%)',
                 sic_cm=sic_raw_cmap, diff_cm=sic_diff_cmap,
-                plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_clim_{_season}_{hemisphere}_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_clim_map_{_season}_{hemisphere}_diff.png'),
             )
 
         _std_maps = _stack_siconc_season_maps(_season_diags, 'std_map')
@@ -910,13 +1020,13 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 grid_file, _std_maps, _sic_labels, hemisphere,
                 sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                 sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-                plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_std_{_season}_{hemisphere}_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_dstd_map_{_season}_{hemisphere}_raw.png'),
             )
             pf.plot_SIC_map(
                 grid_file, _std_maps, _sic_labels, hemisphere,
                 sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                 sic_cm=sic_std_raw_cmap, diff_cm=sic_std_diff_cmap, unit='Std Dev (%)',
-                plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_std_{_season}_{hemisphere}_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_dstd_map_{_season}_{hemisphere}_diff.png'),
             )
 
         _tr_maps = _stack_siconc_season_maps(_season_diags, 'trend_map')
@@ -928,64 +1038,66 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 _sic_labels, hemisphere,
                 trend_range=[-_tr_max, _tr_max],
                 cmap=trend_cmap, unit='%/decade',
-                plot_mode='raw', fig_name=str(fig_dir / f'siconc_spatial_trend_{_season}_{hemisphere}_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / f'siconc_sic_trend_map_{_season}_{hemisphere}_raw.png'),
             )
             pf.plot_trend_map(
                 grid_file, _tr_maps, _tr_pmaps,
                 _sic_labels, hemisphere,
                 trend_range=[-_tr_max, _tr_max],
                 cmap=trend_cmap, unit='%/decade',
-                plot_mode='diff', fig_name=str(fig_dir / f'siconc_spatial_trend_{_season}_{hemisphere}_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / f'siconc_sic_trend_map_{_season}_{hemisphere}_diff.png'),
             )
 
     if len(diff_dicts) >= 1 and obs_diff_dict is not None:
         _metric_specs = [
-            ('(a) SIC mean diff', 'siconc_mean_diff'),
-            ('(b) SIC ano mean diff', 'siconc_std_diff'),
-            ('(c) SIC trend mean diff', 'siconc_trend_diff'),
-            ('(d) SIE mean diff', 'SIE_mean_diff'),
-            ('(e) SIE std diff', 'SIE_std_diff'),
-            ('(f) SIE trend diff', 'SIE_trend_diff'),
-            ('(g) SIA mean diff', 'SIA_mean_diff'),
-            ('(h) SIA std diff', 'SIA_std_diff'),
-            ('(i) SIA trend diff', 'SIA_trend_diff'),
-            ('(j) IIEE mean diff', 'IIEE_mean_diff'),
+            ('SIC Mean AbsDiff[Map]', 'siconc_mean_diff'),
+            ('SIC DStd AbsDiff[Map]', 'siconc_std_diff'),
+            ('SIC Trend AbsDiff[Map]', 'siconc_trend_diff'),
+            ('SIE Mean AbsDiff[TS]', 'SIE_mean_diff'),
+            ('SIE DStd AbsDiff[TS]', 'SIE_std_diff'),
+            ('SIE Trend AbsDiff[TS]', 'SIE_trend_diff'),
+            ('SIA Mean AbsDiff[TS]', 'SIA_mean_diff'),
+            ('SIA DStd AbsDiff[TS]', 'SIA_std_diff'),
+            ('SIA Trend AbsDiff[TS]', 'SIA_trend_diff'),
+            ('IIEE Mean AbsDiff[TS]', 'IIEE_mean_diff'),
         ]
         _metric_labels = [lab for lab, _ in _metric_specs]
         _metric_keys = [key for _, key in _metric_specs]
         _obs2_row = np.array([obs_diff_dict.get(k, float('nan')) for k in _metric_keys], dtype=float)
         _heat_data = np.array([[d.get(k, float('nan')) for k in _metric_keys] for d in diff_dicts], dtype=float)
-        _n_rows = 1 + len(diff_dicts)
+        _cbar_kw = _heatmap_main_cbar_kwargs(len(_metric_keys), len(diff_dicts))
         with _PLOT_LOCK:
-            _fig, _ax = plt.subplots(
-                figsize=(
-                    max(13.5, len(_metric_keys) * 1.05),
-                    max(3, _n_rows) * max(0.1, heat_main_height_scale),
-                )
-            )
+            _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                len(_metric_keys), len(diff_dicts), heat_main_height_scale
+            ))
             pf.plot_heat_map(
                 _heat_data, model_labels, _metric_labels, ax=_ax,
-                cbarlabel='Ratio to obs uncertainty',
+                cbarlabel='Ratio',
                 obs_row=_obs2_row, obs_row_label=obs2_plot_label,
                 ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                display_transform='lin2021_norm',
                 cmap=heatmap_cmap,
+                cbar_kw=_cbar_kw,
             )
-            _fig.tight_layout()
-            pf._save_fig(str(fig_dir / 'heat_map.png'), close=False)
+            _fig.subplots_adjust(**_heatmap_main_adjust(
+                n_models=len(diff_dicts),
+                n_metrics=len(_metric_keys),
+            ))
+            pf._save_fig(str(fig_dir / 'siconc_metrics_heatmap_diff.png'), close=False)
             plt.close(_fig)
 
     if model_dicts and obs_dict2 is not None:
         _season_core = [
-            '(a) SIC mean diff',
-            '(b) SIC ano mean diff',
-            '(c) SIC trend mean diff',
-            '(d) SIE mean diff',
-            '(e) SIE std diff',
-            '(f) SIE trend diff',
-            '(g) SIA mean diff',
-            '(h) SIA std diff',
-            '(i) SIA trend diff',
-            '(j) IIEE mean diff',
+            'SIC Mean AbsDiff[Map]',
+            'SIC DStd AbsDiff[Map]',
+            'SIC Trend AbsDiff[Map]',
+            'SIE Mean AbsDiff[TS]',
+            'SIE DStd AbsDiff[TS]',
+            'SIE Trend AbsDiff[TS]',
+            'SIA Mean AbsDiff[TS]',
+            'SIA DStd AbsDiff[TS]',
+            'SIA Trend AbsDiff[TS]',
+            'IIEE Mean AbsDiff[TS]',
         ]
         _season_core_keys = [
             'SIC_MeanDiff',
@@ -1022,14 +1134,10 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             _obs2_row = np.asarray(_obs2_row, dtype=float)
             with _PLOT_LOCK:
                 _n_metric = len(_season_core)
-                _n_rows = max(1, 1 + len(model_dicts))
-                _panel_w = max(12.2, _n_metric * 0.95)
-                _panel_h = max(3.2, _n_rows * 0.45 + 1.1)
                 _fig, _axes = plt.subplots(
                     2, 2,
-                    figsize=(
-                        _panel_w * 2.0 + 1.0,
-                        (_panel_h * 2.0 + 0.4) * max(0.5, heat_season_height_scale),
+                    figsize=_heatmap_seasonal_figsize(
+                        _n_metric, len(model_dicts), heat_season_height_scale
                     ),
                     squeeze=False,
                 )
@@ -1050,8 +1158,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                         obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin,
                         ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
                         add_colorbar=False,
+                        show_xticklabels=(_ii >= 2),
+                        show_yticklabels=(_ii % 2 == 0),
                     )
                     _ax.set_title(str(_season), fontsize=17, pad=8)
                     _used_axes.append(_ax)
@@ -1061,41 +1172,41 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 for _jj in range(len(_season_names), len(_axes_flat)):
                     _fig.delaxes(_axes_flat[_jj])
 
-                if _first_im is not None and _used_axes:
-                    _cb = _fig.colorbar(
-                        _first_im,
-                        ax=_used_axes,
-                        orientation='vertical',
-                        fraction=max(0.001, heat_season_cbar_fraction),
-                        pad=max(0.0, heat_season_cbar_pad),
-                        aspect=max(1.0, heat_season_cbar_aspect),
-                        extend=pf._resolve_colorbar_extend(
-                            _first_im,
-                            data=np.abs(_heat_data_season),
-                            vmin=heat_ratio_vmin,
-                            vmax=heat_ratio_vmax,
-                            extend='auto',
-                        ),
-                    )
-                    _cb.set_label('Ratio to obs uncertainty', fontsize=16)
-                    _cb.ax.tick_params(labelsize=15)
-
-                _fig.subplots_adjust(
-                    left=0.06,
-                    right=min(0.98, max(0.70, heat_season_right)),
-                    top=0.93,
-                    bottom=0.10,
-                    wspace=max(0.0, heat_season_wspace),
-                    hspace=max(0.0, heat_season_hspace),
+                _adj_kw = _heatmap_seasonal_adjust(
+                    n_models=len(model_dicts),
+                    n_metrics=_n_metric,
+                    wspace=heat_season_wspace,
+                    hspace=heat_season_hspace,
+                    right_margin=heat_season_right,
                 )
-                pf._save_fig(str(fig_dir / 'heat_map_seasonal.png'), close=False)
+                _fig.subplots_adjust(**_adj_kw)
+                if _first_im is not None and _used_axes:
+                    _cb_kw = _heatmap_seasonal_cbar_kwargs(
+                        n_metrics=_n_metric,
+                        n_models=len(model_dicts),
+                        fraction=heat_season_cbar_fraction,
+                        pad=heat_season_cbar_pad,
+                        aspect=heat_season_cbar_aspect,
+                    )
+                    pf._bottom_cbar(
+                        _fig,
+                        _first_im,
+                        _used_axes,
+                        label='Ratio',
+                        extend='auto',
+                        fraction=_cb_kw['fraction'],
+                        pad=_cb_kw['pad'],
+                        aspect=_cb_kw['aspect'],
+                        data=np.abs(_heat_data_season),
+                    )
+                pf._save_fig(str(fig_dir / 'siconc_metrics_heatmap_seasonal_diff.png'), close=False)
                 plt.close(_fig)
 
     try:
         pf.plot_sic_region_map(
             grid_nc_file=grid_file,
             hms=hemisphere,
-            fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+            fig_name=str(fig_dir / 'geo_sector_map.png'),
         )
     except Exception as exc:
         logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -1207,6 +1318,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
     try:
         ano_keys = ('SIE', 'SIA', 'PIA', 'MIZ')
 
+        # -----------------------------------------------------------------------------
+        # Function: `_series_mean`.
+        # Purpose: Handle series mean workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _series_mean(metric_dict: dict, key: str) -> float:
             arr = np.asarray(
                 metric_dict.get(f'{key}_ts', metric_dict.get(f'{key}_clim', np.array([]))),
@@ -1217,6 +1333,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             out = float(np.nanmean(arr))
             return out if np.isfinite(out) else np.nan
 
+        # -----------------------------------------------------------------------------
+        # Function: `_series_trend`.
+        # Purpose: Handle series trend workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _series_trend(metric_dict: dict, key: str) -> Tuple[float, float]:
             payload = metric_dict.get(f'{key}_ano_tr')
             slope, pval = pf._extract_trend_slope_pvalue(payload)
@@ -1239,6 +1360,11 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                 return np.nan, pval
             return float(slope) * 12.0 * 10.0, pval
 
+        # -----------------------------------------------------------------------------
+        # Function: `_fmt_with_sig`.
+        # Purpose: Handle fmt with sig workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _fmt_with_sig(value: float, pval: float) -> str:
             base = _format_siconc_value(value, digits=3)
             if base == 'nan':
@@ -1262,16 +1388,31 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
             summary_rows.append(row)
 
         if summary_rows:
+            _summary_meta: List[Dict[str, str]] = []
+            for _vv in ('sie', 'sia', 'pia', 'miz'):
+                _uu = _vv.upper()
+                _summary_meta.extend([
+                    _metric_meta(
+                        f'siconc.{_vv}.mean.ts.raw',
+                        f'{_uu} Mean[TS] Raw',
+                        long_label=f'{_uu} anomaly-series mean (raw value)',
+                        scope='TS',
+                        stat='Mean',
+                        op='Raw',
+                    ),
+                    _metric_meta(
+                        f'siconc.{_vv}.trend.ts.raw',
+                        f'{_uu} Trend[TS] Raw',
+                        long_label=f'{_uu} anomaly-series trend (raw value)',
+                        scope='TS',
+                        stat='Trend',
+                        op='Raw',
+                    ),
+                ])
             siconc_payload.setdefault('extra_tables', []).append({
                 'type': 'basic_table',
                 'title': 'SIC Anomaly Summary',
-                'headers': [
-                    'Dataset',
-                    'SIE Mean', 'SIE Trend',
-                    'SIA Mean', 'SIA Trend',
-                    'PIA Mean', 'PIA Trend',
-                    'MIZ Mean', 'MIZ Trend',
-                ],
+                'headers': ['Dataset'] + [m['short_label'] for m in _summary_meta],
                 'units': [
                     '',
                     '10⁶ km²', '10⁶ km²/decade',
@@ -1279,6 +1420,7 @@ def eval_sic(case_name: str, recipe: RR.RecipeReader,
                     '10⁶ km²', '10⁶ km²/decade',
                     '10⁶ km²', '10⁶ km²/decade',
                 ],
+                'metric_meta': _summary_meta,
                 'rows': summary_rows,
             })
     except Exception as exc:

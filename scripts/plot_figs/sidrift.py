@@ -7,6 +7,11 @@ from scripts.plot_figs import core as _core
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_axis_span_in_figure`.
+# Purpose: Handle axis span in figure workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _axis_span_in_figure(ax):
     if ax is None:
         return 0.10, 0.90, 0.10
@@ -14,6 +19,11 @@ def _axis_span_in_figure(ax):
     return float(bb.x0), float(bb.x1), float(bb.y0)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_legend_ncol_by_width`.
+# Purpose: Handle legend ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     n_items = max(1, len(labels))
     fs = float(fontsize)
@@ -22,44 +32,36 @@ def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     char_px = fs * float(fig.dpi) / 72.0 * 0.60
     item_px = max(70.0, char_px * (widest_chars + 8.0))
     max_fit = max(1, int(fig_width_px // item_px))
-    by_rows = max(1, int(math.ceil(n_items / max(1, int(target_rows)))))
-    return max(1, min(n_items, max_fit, by_rows))
+    max_rows = max(1, int(target_rows))
+
+    for rows in range(1, max_rows + 1):
+        ncol = int(math.ceil(n_items / float(rows)))
+        if ncol <= max_fit:
+            return max(1, min(n_items, ncol))
+
+    return max(1, min(n_items, max_fit))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_place_adaptive_bottom_legend`.
+# Purpose: Handle place adaptive bottom legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _place_adaptive_bottom_legend(fig, ax, handles, labels, *,
                                   target_rows=3, fontsize=None, y_gap=0.040):
-    if not handles or not labels:
-        return None
-    fs = _FS_LEGEND if fontsize is None else float(fontsize)
-    x0, x1, _ = _axis_span_in_figure(ax)
-    width = max(0.15, x1 - x0)
-    ncol = _legend_ncol_by_width(fig, labels, width, target_rows, fs)
-    n_rows = int(math.ceil(len(labels) / float(max(1, ncol))))
-    bottom_margin = min(
-        0.46,
-        max(0.14, 0.07 + 0.056 * n_rows) + max(0.0, float(_LINE_LEGEND_BOTTOM_MARGIN_EXTRA)),
-    )
-    fig.subplots_adjust(bottom=bottom_margin)
-    x0, x1, y0 = _axis_span_in_figure(ax)
-    width = max(0.15, x1 - x0)
-    gap_auto = float(y_gap) + 0.004 * max(0, n_rows - 1)
-    legend_top = max(
-        0.01,
-        y0 - gap_auto - max(0.0, float(_LINE_LEGEND_Y_GAP_EXTRA)),
-    )
-    return fig.legend(
-        handles, labels,
-        loc='upper left',
-        bbox_to_anchor=(x0, legend_top, width, 0.01),
-        bbox_transform=fig.transFigure,
-        ncol=ncol,
-        mode='expand',
-        fontsize=fs,
-        frameon=_LINE_LEGEND_FRAMEON,
-        borderaxespad=0.0,
+    return _place_unified_line_legend(
+        fig,
+        ax,
+        handles,
+        labels,
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SID_ts`.
+# Purpose: Handle plot SID ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SID_ts(sid_metric_obs, sid_metric_AllModel, model_labels,
                 line_style=None, color=None, fig_name=None,
                 model_spread_payloads=None, **kwargs):
@@ -128,6 +130,11 @@ def plot_SID_ts(sid_metric_obs, sid_metric_AllModel, model_labels,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SID_ano`.
+# Purpose: Handle plot SID ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SID_ano(sid_metric_obs, sid_metric_AllModel, model_labels, year_range, fig_name,
                  hms=None, line_style=None, color=None,
                  model_spread_payloads=None, **kwargs):
@@ -240,25 +247,22 @@ def plot_SID_ano(sid_metric_obs, sid_metric_AllModel, model_labels, year_range, 
     _set_symmetric_ylim(ax, pad_ratio=0.1)
 
     handles, labels_leg = ax.get_legend_handles_labels()
-    if handles:
-        n_items = len(handles)
-        ncol = min(4, max(2, int(math.ceil(n_items / 5))))
-        ax.legend(
-            handles, labels_leg,
-            loc='upper left',
-            ncol=ncol,
-            fontsize=max(8, _FS_LEGEND - 2),
-            frameon=True,
-            borderaxespad=0.6,
-            handlelength=2.0,
-            columnspacing=1.0,
-        )
-
     _finalize_line_layout(fig, legend_location='none', pad=0.9)
-    fig.subplots_adjust(left=0.08, right=0.98, top=0.95, bottom=0.14, hspace=0.08)
+    fig.subplots_adjust(left=0.08, right=0.98, top=0.95)
+    _place_adaptive_bottom_legend(
+        fig, ax, handles, labels_leg,
+        target_rows=3,
+        fontsize=max(9, _FS_LEGEND - 1),
+        y_gap=0.056,
+    )
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SID_key_month_ano`.
+# Purpose: Handle plot SID key month ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SID_key_month_ano(sid_metric_obs, sid_metric_AllModel, model_labels, year_range,
                            month, fig_name=None, hms=None, line_style=None, color=None,
                            legend_y_gap=None, model_spread_payloads=None, **kwargs):
@@ -335,6 +339,11 @@ def plot_SID_key_month_ano(sid_metric_obs, sid_metric_AllModel, model_labels, ye
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_MKE_map`.
+# Purpose: Handle plot MKE map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_MKE_map(lon, lat, data, model_labels, hms, plot_mode='mixed',
                  raw_cmap='viridis', diff_cmap='RdBu_r',
                  fig_name=None, **kwargs):
@@ -433,6 +442,11 @@ def plot_MKE_map(lon, lat, data, model_labels, hms, plot_mode='mixed',
 
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_VectCorr_map`.
+# Purpose: Handle plot VectCorr map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_VectCorr_map(lon, lat, data, model_labels, hms, data_cm='viridis', unit='', fig_name=None, **kwargs):
     """
 
@@ -442,7 +456,7 @@ def plot_VectCorr_map(lon, lat, data, model_labels, hms, data_cm='viridis', unit
     - model_labels: A list or array of length N with the labels for the model data
 
     """
-    N, nx, ny = data.shape
+    N = data.shape[0]
     rows, cols = _adaptive_grid(N)
     finite = np.asarray(data, dtype=float)
     finite = finite[np.isfinite(finite)]
@@ -478,6 +492,11 @@ def plot_VectCorr_map(lon, lat, data, model_labels, hms, data_cm='viridis', unit
 
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SID_map`.
+# Purpose: Handle plot SID map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SID_map(lon, lat, data, model_labels, hms, kk,
                  sid_range=None, data_cm='YlGn', unit='',
                  rotate_flags=None, fig_name=None,
@@ -485,7 +504,7 @@ def plot_SID_map(lon, lat, data, model_labels, hms, kk,
                  quiver_min_speed=0.0,
                  **kwargs):
     """Plot winter sea-ice drift speed with quiver vectors only."""
-    N, _, _, nx, ny = data.shape
+    N = data.shape[0]
     rows, cols = _adaptive_grid(N)
     if sid_range is None:
         sid_range = [0, 0.3]

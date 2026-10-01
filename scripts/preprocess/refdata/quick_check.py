@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 cdo = Cdo(options=['-f nc4 -z zip'])
 
 
+# -----------------------------------------------------------------------------
+# Function: `time_match`.
+# Purpose: Handle time match workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def time_match(a_file, b_file, output_file):
     """Extract data from b_file based on time information from a_file.
 
@@ -73,6 +78,11 @@ def time_match(a_file, b_file, output_file):
     return valid_times
 
 
+# -----------------------------------------------------------------------------
+# Function: `stats_miss`.
+# Purpose: Handle stats miss workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def stats_miss(data_file, var_name, sic_file, temp_dir=None):
     """Statistical analysis of missing values in different SIC intervals.
 
@@ -125,6 +135,11 @@ def stats_miss(data_file, var_name, sic_file, temp_dir=None):
     return prop_inv, miss_prop, time_stamps
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_check_miss_general`.
+# Purpose: Handle plot check miss general workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_check_miss_general(data_file, var_name, hemisphere, flag,
                             sic_ref_dir, save_fig=False, temp_dir=None):
     """Plot missing value statistics for a dataset.

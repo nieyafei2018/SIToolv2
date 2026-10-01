@@ -22,8 +22,8 @@ variables:
     # For Arctic, including: CA, CBS, LESS, KBS, EG, HBB and CAA
     sector:
     - All
-    SIToolv2_RefData_path: /mnt/h/SIToolv2_RefData/
-    model_data_path: /mnt/h/CMIP6/HighResMIP/
+    SIToolv2_RefData_path: /media/yafei/Data/Data/SIToolv2_RefData/
+    model_data_path: /media/yafei/Data/Data/CMIP6/HighResMIP/
     # Compact recipe: define model list once, modules reuse by `model_group: all_models`
     model_groups:
       all_models:
@@ -96,7 +96,7 @@ variables:
         obs2: Obs2
     model_var: siconc
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models
@@ -132,7 +132,7 @@ variables:
     - null
     - null
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models
@@ -146,8 +146,8 @@ variables:
   SIthick:
     # Chose observation references
     ref_nh:
+    - CTOH_sithick_monthly_nh_199410-202304.nc
     - PIOMAS_nh_sithick_mon_197901-202312.nc
-    - TOPAZ4b_nh_sithick_mon_199101-202312.nc
     ref_sh:
     - CTOH_sithick_monthly_sh_199404-202306.nc
     - GIOMAS_sh_sithick_mon_197901-202312.nc
@@ -163,7 +163,7 @@ variables:
     ref_var: sithick_eff
     model_var: sivol
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models
@@ -178,7 +178,7 @@ variables:
     - SnowModel-LG_nh_snod_ERA5_v01_19800801-20210731.nc
     - CTOH_sndepth_monthly_nh_199410-202304.nc
     ref_sh:
-    - MPMR_SNdepth_sh_20020601-20200531_monmean.nc
+    - C-GLORSv7_sndepth_sh_monthly_198901-202312.nc
     - CTOH_sndepth_monthly_sh_199404-202306.nc
     # Optional observation display names for Cross-Module controls
     obs_names:
@@ -192,7 +192,7 @@ variables:
     ref_var: snow_depth_eff
     model_var: sisnthick
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models
@@ -227,7 +227,7 @@ variables:
     model_var_u: siu
     model_var_v: siv
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models
@@ -261,7 +261,7 @@ variables:
     persistence_days: 7
     trend_significance_p: 0.05
     year_range:
-    - 2003
+    - 1994
     - 2010
     stats_metric: RMSE
     model_group: all_models

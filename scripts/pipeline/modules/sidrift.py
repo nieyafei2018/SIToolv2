@@ -10,11 +10,23 @@ from scripts.config import DAYS_PER_MONTH
 from scripts.pipeline.modules.common import (
     _apply_plot_runtime_options,
     _check_outputs_exist,
+    _heatmap_main_adjust,
+    _heatmap_main_cbar_kwargs,
+    _heatmap_main_figsize,
+    _heatmap_seasonal_adjust,
+    _heatmap_seasonal_cbar_kwargs,
+    _heatmap_seasonal_figsize,
     _load_plot_options,
     _plot_options_get_module,
+    _reuse_processed_inputs_for_recalculate,
 )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_month_mask`.
+# Purpose: Handle sid month mask workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_month_mask(time_keys: Any, size: int, month: int) -> np.ndarray:
     """Build month selector from cached (year, month[, day]) keys."""
     size = max(0, int(size))
@@ -37,6 +49,11 @@ def _sid_month_mask(time_keys: Any, size: int, month: int) -> np.ndarray:
     return mask
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_season_months`.
+# Purpose: Handle sid season months workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     """Return canonical season -> month mapping for one hemisphere."""
     h = str(hemisphere or '').lower()
@@ -55,6 +72,11 @@ def _sid_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_domain_specs`.
+# Purpose: Handle sid domain specs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_domain_specs(hemisphere: str) -> List[Tuple[str, Tuple[str, Optional[Any]]]]:
     """Return ordered domain specs (annual + seasons + key months)."""
     specs: List[Tuple[str, Tuple[str, Optional[Any]]]] = [('Annual', ('annual', None))]
@@ -67,6 +89,11 @@ def _sid_domain_specs(hemisphere: str) -> List[Tuple[str, Tuple[str, Optional[An
     return specs
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_yearmon_series`.
+# Purpose: Handle sid yearmon series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_yearmon_series(metric_dict: Dict[str, Any], n_time: int) -> List[Tuple[int, int]]:
     """Infer (year, month) per time step for one SID metric payload."""
     if n_time <= 0:
@@ -100,6 +127,11 @@ def _sid_yearmon_series(metric_dict: Dict[str, Any], n_time: int) -> List[Tuple[
     return [(int(years[ii]), int(mons[ii])) for ii in range(n_time)]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_matrix_seasonal_mean`.
+# Purpose: Handle sid matrix seasonal mean workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_matrix_seasonal_mean(field_mon: np.ndarray, months: Tuple[int, ...]) -> np.ndarray:
     """Weighted seasonal mean map from 12-month climatology field."""
     arr = np.asarray(field_mon, dtype=float)
@@ -122,6 +154,11 @@ def _sid_matrix_seasonal_mean(field_mon: np.ndarray, months: Tuple[int, ...]) ->
     return np.nansum(maps_arr * w[:, None, None], axis=0) / np.sum(w)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_seasonal_diagnostics`.
+# Purpose: Handle sid seasonal diagnostics workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_seasonal_diagnostics(
     metric_dict: Optional[dict],
     season: str,
@@ -212,6 +249,11 @@ def _sid_seasonal_diagnostics(
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_matrix_corr`.
+# Purpose: Handle sid matrix corr workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_matrix_corr(arr1: np.ndarray, arr2: np.ndarray) -> float:
     """Spatial correlation over finite overlap of two 2D arrays."""
     a = np.asarray(arr1, dtype=float)
@@ -230,6 +272,11 @@ def _sid_matrix_corr(arr1: np.ndarray, arr2: np.ndarray) -> float:
     return float(np.corrcoef(va, vb)[0, 1])
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_vector_cosine_mean`.
+# Purpose: Handle sid vector cosine mean workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_vector_cosine_mean(
     u1_map: np.ndarray,
     v1_map: np.ndarray,
@@ -258,6 +305,11 @@ def _sid_vector_cosine_mean(
     return float(np.nanmean(vv))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_month_skill`.
+# Purpose: Handle sid extract month skill workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_month_skill(diff_dict: Optional[dict], month: Optional[int]) -> Tuple[float, float]:
     """Return (Corr, RMSE) for one key month (or annual) from one SID 2M payload."""
     if not isinstance(diff_dict, dict):
@@ -340,6 +392,11 @@ def _sid_extract_month_skill(diff_dict: Optional[dict], month: Optional[int]) ->
     return float(corr) if np.isfinite(corr) else np.nan, float(rmse) if np.isfinite(rmse) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_month_trend_map`.
+# Purpose: Handle sid month trend map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_month_trend_map(field_ts: np.ndarray, samples_per_year: float = 1.0) -> np.ndarray:
     """Return per-grid linear trend (per decade) for a map time series."""
     arr = np.asarray(field_ts, dtype=float)
@@ -396,6 +453,11 @@ def _sid_month_trend_map(field_ts: np.ndarray, samples_per_year: float = 1.0) ->
     return slope_per_sample * spp * 10.0
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_month_map_diffs`.
+# Purpose: Handle sid extract month map diffs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_month_map_diffs(
     sid1: dict, sid2: dict, month: Optional[int]
 ) -> Tuple[float, float]:
@@ -419,8 +481,8 @@ def _sid_extract_month_map_diffs(
 
         month_ano1 = field_ano1[mon_mask, :, :]
         month_ano2 = field_ano2[mon_mask, :, :]
-        std1 = np.nanstd(month_ano1, axis=0)
-        std2 = np.nanstd(month_ano2, axis=0)
+        std1 = utils.detrended_std_map(month_ano1, min_count=2)
+        std2 = utils.detrended_std_map(month_ano2, min_count=2)
         samples_per_year = 12.0 if month is None else 1.0
         tr1 = _sid_month_trend_map(month_ano1, samples_per_year=samples_per_year)
         tr2 = _sid_month_trend_map(month_ano2, samples_per_year=samples_per_year)
@@ -435,6 +497,11 @@ def _sid_extract_month_map_diffs(
     return np.nan, np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_month_extended_stats`.
+# Purpose: Handle sid extract month extended stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_month_extended_stats(
     diff_dict: Optional[dict], month: Optional[int]
 ) -> Tuple[float, float, float, float, float, float, float, float]:
@@ -503,7 +570,10 @@ def _sid_extract_month_extended_stats(
             if int(np.sum(valid)) >= 2:
                 s1m = s1[valid]
                 s2m = s2[valid]
-                ano_std_diff = abs(float(np.nanstd(s1m)) - float(np.nanstd(s2m)))
+                sd1 = utils.detrended_std_1d(s1m)
+                sd2 = utils.detrended_std_1d(s2m)
+                if np.isfinite(sd1) and np.isfinite(sd2):
+                    ano_std_diff = abs(float(sd1) - float(sd2))
                 if s1m.size >= 2 and s2m.size >= 2:
                     x = np.arange(s1m.size, dtype=float)
                     try:
@@ -515,6 +585,8 @@ def _sid_extract_month_extended_stats(
                         ano_trend_diff = np.nan
                 break
 
+    if not np.isfinite(ano_std_diff):
+        ano_std_diff = diff_dict.get('MKE_ts_ano_std_diff_detrended', np.nan)
     if not np.isfinite(ano_std_diff):
         ano_std_diff = diff_dict.get('speed_ts_ano_std', np.nan)
     if not np.isfinite(ano_std_diff):
@@ -533,6 +605,8 @@ def _sid_extract_month_extended_stats(
         ano_trend_diff = diff_dict.get('MKE_ts_trend_diff', np.nan)
 
     if not np.isfinite(std_map_diff):
+        std_map_diff = diff_dict.get('MKE_std_map_diff_detrended', np.nan)
+    if not np.isfinite(std_map_diff):
         std_map_diff = diff_dict.get('MKE_std_diff', np.nan)
     if not np.isfinite(trend_map_diff):
         trend_map_diff = diff_dict.get('MKE_trend_diff', np.nan)
@@ -549,10 +623,20 @@ def _sid_extract_month_extended_stats(
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_fmt_sid_month_stat`.
+# Purpose: Handle fmt sid month stat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _fmt_sid_month_stat(value: float) -> str:
     return _format_min_sig(value, min_sig=3)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_month_absolute_stats`.
+# Purpose: Handle sid extract month absolute stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_month_absolute_stats(
     metric_dict: Optional[dict], month: Optional[int]
 ) -> Tuple[float, float, float, float, float]:
@@ -620,7 +704,7 @@ def _sid_extract_month_absolute_stats(
         if int(np.sum(valid)) <= 0:
             continue
         vals = ts[valid]
-        ano_ts_std = float(np.nanstd(vals))
+        ano_ts_std = utils.detrended_std_1d(vals)
         if vals.size >= 2:
             x = np.arange(vals.size, dtype=float)
             try:
@@ -652,7 +736,7 @@ def _sid_extract_month_absolute_stats(
         if int(np.sum(mask)) < 2:
             continue
         month_ano = ano[mask, :, :]
-        std_map = np.nanstd(month_ano, axis=0)
+        std_map = utils.detrended_std_map(month_ano, min_count=2)
         std_map_mean = float(np.nanmean(std_map)) if np.any(np.isfinite(std_map)) else np.nan
         tr_map = _sid_month_trend_map(
             month_ano,
@@ -665,6 +749,10 @@ def _sid_extract_month_absolute_stats(
         )
         break
 
+    if not np.isfinite(std_map_mean):
+        std_map = np.asarray(metric_dict.get('MKE_ano_std_map', np.array([])), dtype=float)
+        if std_map.ndim == 2 and np.any(np.isfinite(std_map)):
+            std_map_mean = float(np.nanmean(std_map))
     if not np.isfinite(std_map_mean):
         std_map = np.asarray(metric_dict.get('MKE_ano_std', np.array([])), dtype=float)
         if std_map.ndim == 2 and np.any(np.isfinite(std_map)):
@@ -683,6 +771,11 @@ def _sid_extract_month_absolute_stats(
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_domain_absolute_stats`.
+# Purpose: Handle sid extract domain absolute stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_domain_absolute_stats(
     metric_dict: Optional[dict],
     domain: Tuple[str, Optional[Any]],
@@ -709,7 +802,7 @@ def _sid_extract_domain_absolute_stats(
         mean_value = float(np.nanmean(clim_map)) if clim_map.ndim == 2 and np.any(np.isfinite(clim_map)) else np.nan
         std_map_mean = float(np.nanmean(std_map)) if std_map.ndim == 2 and np.any(np.isfinite(std_map)) else np.nan
         trend_map_mean = float(np.nanmean(np.abs(tr_map))) if tr_map.ndim == 2 and np.any(np.isfinite(tr_map)) else np.nan
-        ano_ts_std = float(np.nanstd(ts_ano)) if ts_ano.size > 0 and np.any(np.isfinite(ts_ano)) else np.nan
+        ano_ts_std = utils.detrended_std_1d(ts_ano)
         ano_ts_trend = np.nan
         if ts_ano.size >= 2:
             valid = np.isfinite(ts_ano)
@@ -730,6 +823,11 @@ def _sid_extract_domain_absolute_stats(
     return _sid_extract_month_absolute_stats(metric_dict, None)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sid_extract_domain_extended_stats`.
+# Purpose: Handle sid extract domain extended stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sid_extract_domain_extended_stats(
     diff_dict: Optional[dict],
     domain: Tuple[str, Optional[Any]],
@@ -800,7 +898,10 @@ def _sid_extract_domain_extended_stats(
             if int(np.sum(valid)) >= 2:
                 y1v = y1[valid]
                 y2v = y2[valid]
-                ano_std_diff = abs(float(np.nanstd(y1v)) - float(np.nanstd(y2v)))
+                sd1 = utils.detrended_std_1d(y1v)
+                sd2 = utils.detrended_std_1d(y2v)
+                if np.isfinite(sd1) and np.isfinite(sd2):
+                    ano_std_diff = abs(float(sd1) - float(sd2))
                 if np.nanstd(y1v) > 0 and np.nanstd(y2v) > 0:
                     corr = float(np.corrcoef(y1v, y2v)[0, 1])
                 rmse = float(np.sqrt(np.nanmean((y1v - y2v) ** 2)))
@@ -825,6 +926,11 @@ def _sid_extract_domain_extended_stats(
     return _sid_extract_month_extended_stats(diff_dict, None)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_sid_month_period_raw_table`.
+# Purpose: Handle build sid month period raw table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_sid_month_period_raw_table(
     obs1_metric: Optional[dict],
     obs2_metric: Optional[dict],
@@ -835,14 +941,51 @@ def _build_sid_month_period_raw_table(
     obs2_label: str = 'obs2',
 ) -> Dict[str, Any]:
     """Build annual/season/month raw (absolute) table for SID."""
-    headers = [
-        'Model/Obs Name',
-        'Speed Clim Mean',
-        'Speed Ano TS Std',
-        'Speed Ano TS Trend',
-        'Speed Ano Std Map Mean',
-        'Speed Ano Trend Map Mean',
+    metric_meta: List[Dict[str, str]] = [
+        _metric_meta(
+            'sid.speed.mean.mapmean.raw',
+            'Speed Mean[MapMean] Raw',
+            long_label='Spatial mean of speed climatology (raw value)',
+            scope='MapMean',
+            stat='Mean',
+            op='Raw',
+        ),
+        _metric_meta(
+            'sid.speed.dstd.ts.raw',
+            'Speed DStd[TS-Ano] Raw',
+            long_label='Detrended std of speed anomaly time series (raw value)',
+            scope='TS-Ano',
+            stat='DStd',
+            op='Raw',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'sid.speed.trend.ts.raw',
+            'Speed Trend[TS-Ano] Raw',
+            long_label='Trend of speed anomaly time series (raw value)',
+            scope='TS-Ano',
+            stat='Trend',
+            op='Raw',
+        ),
+        _metric_meta(
+            'sid.speed.dstd.mapmean.raw',
+            'Speed DStd[MapMean] Raw',
+            long_label='Spatial mean of detrended-std anomaly map (raw value)',
+            scope='MapMean',
+            stat='DStd',
+            op='Raw',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'sid.speed.trend.mapmean.raw',
+            'Speed Trend[MapMean] Raw',
+            long_label='Spatial mean of anomaly trend map (raw value)',
+            scope='MapMean',
+            stat='Trend',
+            op='Raw',
+        ),
     ]
+    headers = ['Model/Obs Name'] + [m['short_label'] for m in metric_meta]
     units = ['', 'm/s', 'm/s', 'm/s/decade', 'm/s', 'm/s/decade']
     specs = _sid_domain_specs(hemisphere)
     season_order = [name for name, _ in specs]
@@ -889,10 +1032,16 @@ def _build_sid_month_period_raw_table(
         'headers': headers,
         'rows': [],
         'units': units,
+        'metric_meta': metric_meta,
         'seasons': seasons,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_sid_month_period_table`.
+# Purpose: Handle build sid month period table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_sid_month_period_table(obs2_diff: Optional[dict],
                                   diff_dicts: List[dict],
                                   model_labels: List[str],
@@ -900,17 +1049,75 @@ def _build_sid_month_period_table(obs2_diff: Optional[dict],
                                   obs1_label: str = 'obs1 (baseline)',
                                   obs2_label: str = 'obs2') -> Dict[str, Any]:
     """Build annual/season/month period tabs for SID scalar table."""
-    headers = [
-        'Model/Obs Name',
-        'Speed Clim MAE',
-        'Speed Ano TS Std Diff',
-        'Speed Ano TS Trend Diff',
-        'Speed Ano Std Map Diff',
-        'Speed Ano Trend Map Diff',
-        'VectCorr Mean',
-        'Ano TS Corr',
-        'Ano TS RMSE',
+    metric_meta: List[Dict[str, str]] = [
+        _metric_meta(
+            'sid.speed.mean.map.mae',
+            'Speed MAE[Map]',
+            long_label='MAE between speed climatology maps',
+            scope='Map',
+            stat='Mean',
+            op='MAE',
+        ),
+        _metric_meta(
+            'sid.speed.dstd.ts.absdiff',
+            'Speed DStd AbsDiff[TS-Ano]',
+            long_label='Absolute difference of speed-anomaly detrended std (TS)',
+            scope='TS-Ano',
+            stat='DStd',
+            op='AbsDiff',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'sid.speed.trend.ts.absdiff',
+            'Speed Trend AbsDiff[TS-Ano]',
+            long_label='Absolute difference of speed-anomaly trend (TS)',
+            scope='TS-Ano',
+            stat='Trend',
+            op='AbsDiff',
+        ),
+        _metric_meta(
+            'sid.speed.dstd.map.mae',
+            'Speed DStd MAE[Map]',
+            long_label='MAE between speed-anomaly detrended-std maps',
+            scope='Map',
+            stat='DStd',
+            op='MAE',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'sid.speed.trend.map.mae',
+            'Speed Trend MAE[Map]',
+            long_label='MAE between speed-anomaly trend maps',
+            scope='Map',
+            stat='Trend',
+            op='MAE',
+        ),
+        _metric_meta(
+            'sid.vcorr.map.skill',
+            'VectCorr[Map]',
+            long_label='Vector-correlation skill on climatology vector fields',
+            scope='Map',
+            stat='Corr',
+            op='Skill',
+        ),
+        _metric_meta(
+            'sid.corr.ts.skill',
+            'Corr[TS-Ano]',
+            long_label='Correlation skill on speed-anomaly time series',
+            scope='TS-Ano',
+            stat='Corr',
+            op='Skill',
+        ),
+        _metric_meta(
+            'sid.rmse.ts.skill',
+            'RMSE[TS-Ano]',
+            long_label='RMSE skill on speed-anomaly time series',
+            scope='TS-Ano',
+            stat='RMSE',
+            op='Skill',
+        ),
     ]
+    headers = ['Model/Obs Name'] + [m['short_label'] for m in metric_meta]
     units = ['', 'm/s', 'm/s', 'm/s/decade', 'm/s', 'm/s/decade', '', '', 'm/s']
     specs = _sid_domain_specs(hemisphere)
     season_order = [name for name, _ in specs]
@@ -928,22 +1135,20 @@ def _build_sid_month_period_table(obs2_diff: Optional[dict],
             _fmt_sid_month_stat(0.0),
             _fmt_sid_month_stat(0.0),
         ]]
-        obs2_vals: Optional[List[float]] = None
         if isinstance(obs2_diff, dict):
             md0, sd0, td0, sm0, tm0, vc0, c0, r0 = _sid_extract_domain_extended_stats(
                 obs2_diff, domain, hemisphere
             )
-            obs2_vals = [md0, sd0, td0, sm0, tm0, vc0, c0, r0]
             rows.append([
                 str(obs2_label),
-                _fmt_sid_month_stat(_obs2_identity_ratio(md0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(sd0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(td0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(sm0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(tm0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(vc0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(c0)),
-                _fmt_sid_month_stat(_obs2_identity_ratio(r0)),
+                _fmt_sid_month_stat(md0),
+                _fmt_sid_month_stat(sd0),
+                _fmt_sid_month_stat(td0),
+                _fmt_sid_month_stat(sm0),
+                _fmt_sid_month_stat(tm0),
+                _fmt_sid_month_stat(vc0),
+                _fmt_sid_month_stat(c0),
+                _fmt_sid_month_stat(r0),
             ])
 
         for ii, dct in enumerate(diff_dicts):
@@ -951,19 +1156,16 @@ def _build_sid_month_period_table(obs2_diff: Optional[dict],
             md, sd, td, sm, tm, vc, cc, rr = _sid_extract_domain_extended_stats(
                 dct, domain, hemisphere
             )
-            vals = [md, sd, td, sm, tm, vc, cc, rr]
-            if obs2_vals is not None:
-                vals = [_calc_obs2_ratio(v, b) for v, b in zip(vals, obs2_vals)]
             rows.append([
                 label,
-                _fmt_sid_month_stat(vals[0]),
-                _fmt_sid_month_stat(vals[1]),
-                _fmt_sid_month_stat(vals[2]),
-                _fmt_sid_month_stat(vals[3]),
-                _fmt_sid_month_stat(vals[4]),
-                _fmt_sid_month_stat(vals[5]),
-                _fmt_sid_month_stat(vals[6]),
-                _fmt_sid_month_stat(vals[7]),
+                _fmt_sid_month_stat(md),
+                _fmt_sid_month_stat(sd),
+                _fmt_sid_month_stat(td),
+                _fmt_sid_month_stat(sm),
+                _fmt_sid_month_stat(tm),
+                _fmt_sid_month_stat(vc),
+                _fmt_sid_month_stat(cc),
+                _fmt_sid_month_stat(rr),
             ])
         seasons[season_name] = rows
 
@@ -973,10 +1175,16 @@ def _build_sid_month_period_table(obs2_diff: Optional[dict],
         'headers': headers,
         'rows': [],
         'units': units,
+        'metric_meta': metric_meta,
         'seasons': seasons,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `eval_sidrift`.
+# Purpose: Handle eval sidrift workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                  data_dir: str, output_dir: str,
                  recalculate: bool = False,
@@ -1047,6 +1255,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
     if _check_outputs_exist(module, fig_dir, hemisphere, recalculate=recalculate):
         logger.info(f"{module} evaluation skipped - all outputs exist.")
         return None
+
+    reuse_processed_inputs = _reuse_processed_inputs_for_recalculate(case_name, recalculate)
+    if recalculate and reuse_processed_inputs:
+        logger.info(
+            "%s recalculate mode: reusing existing processed inputs (no preprocess overwrite).",
+            module,
+        )
 
     cache_file = _get_metrics_cache_file(case_name, output_dir, hemisphere, module)
     grid_file = _get_eval_grid(case_name, module, hemisphere)
@@ -1149,7 +1364,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             model_angle=model_angle,
             frequency='monthly',
             output_dir=data_dir,
-            overwrite=recalculate,
+            overwrite=bool(recalculate and (not reuse_processed_inputs)),
             prefer_metadata=True,
             jobs=jobs,
         )
@@ -1233,6 +1448,11 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             stage_dir = _get_stage_dir(case_name, output_dir, hemisphere, module) / 'model_metrics'
             stage_dir.mkdir(parents=True, exist_ok=True)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_worker`.
+            # Purpose: Handle worker workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _worker(task: Tuple[int, Tuple[str, str]]) -> Dict[str, Any]:
                 idx, (mf_u, mf_v) = task
                 model_dir = 'xy'
@@ -1539,6 +1759,12 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
         logger.info('Generating figures ...')
         fig_dir = Path(output_dir) / module
         fig_dir.mkdir(parents=True, exist_ok=True)
+        # Remove legacy PNGs from previous naming schemes to avoid mixed HTML listing.
+        for _stale_png in fig_dir.glob('*.png'):
+            try:
+                _stale_png.unlink()
+            except Exception:
+                continue
 
         obs_list = [obs_dict] + ([obs2_dict] if obs2_dict is not None else [])
         all_labels = [obs1_plot_label] + ([obs2_plot_label] if obs2_dict is not None else []) + model_labels
@@ -1549,19 +1775,19 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
 
         pf.plot_SID_ts(
             obs_list, base_model_dicts_for_ts, base_labels_for_ts,
-            fig_name=str(fig_dir / 'SID_ts.png'),
+            fig_name=str(fig_dir / 'sidrift_sid_ts_raw.png'),
             line_style=line_styles, color=line_colors,
         )
         pf.plot_SID_ano(
             obs_list, base_model_dicts_for_ts, base_labels_for_ts, module_vars['year_range'],
-            fig_name=str(fig_dir / 'SID_ano.png'), hms=hemisphere,
+            fig_name=str(fig_dir / 'sidrift_sid_ano_ts_raw.png'), hms=hemisphere,
             line_style=line_styles, color=line_colors,
         )
         for month in (3, 9):
             mtag = SIM.SeaIceMetricsBase.month_tag(month)
             pf.plot_SID_key_month_ano(
                 obs_list, base_model_dicts_for_ts, base_labels_for_ts, module_vars['year_range'],
-                month=month, fig_name=str(fig_dir / f'sidrift_ano_timeseries_{mtag}.png'),
+                month=month, fig_name=str(fig_dir / f'sidrift_sid_ano_ts_{mtag}_raw.png'),
                 hms=hemisphere,
                 line_style=line_styles, color=line_colors,
                 legend_y_gap=key_month_legend_gap,
@@ -1573,7 +1799,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     [obs1_plot_label] + ([obs2_plot_label] if obs2_dict is not None else []) + group_labels,
                     module_vars['year_range'],
                     month=month,
-                    fig_name=str(fig_dir / f'sidrift_ano_timeseries_{mtag}_groupmean.png'),
+                    fig_name=str(fig_dir / f'sidrift_sid_ano_ts_{mtag}_groupmean_raw.png'),
                     hms=hemisphere,
                     line_style=line_styles, color=line_colors,
                     legend_y_gap=key_month_legend_gap,
@@ -1583,13 +1809,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             group_labels_for_ts = [obs1_plot_label] + ([obs2_plot_label] if obs2_dict is not None else []) + group_labels
             pf.plot_SID_ts(
                 obs_list, group_model_means_for_ts, group_labels_for_ts,
-                fig_name=str(fig_dir / 'SID_ts_groupmean.png'),
+                fig_name=str(fig_dir / 'sidrift_sid_ts_groupmean_raw.png'),
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_stds_for_ts,
             )
             pf.plot_SID_ano(
                 obs_list, group_model_means_for_ts, group_labels_for_ts, module_vars['year_range'],
-                fig_name=str(fig_dir / 'SID_ano_groupmean.png'), hms=hemisphere,
+                fig_name=str(fig_dir / 'sidrift_sid_ano_ts_groupmean_raw.png'), hms=hemisphere,
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_stds_for_ts,
             )
@@ -1598,22 +1824,22 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
         _mke_data = np.array([np.nanmean(d['MKE_clim'], axis=0) for d in _all_dicts])
         pf.plot_MKE_map(_lon, _lat, _mke_data, all_labels, hemisphere,
                         plot_mode='raw', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                        fig_name=str(fig_dir / 'MKE_map_raw.png'))
+                        fig_name=str(fig_dir / 'sidrift_mke_mean_map_raw.png'))
         pf.plot_MKE_map(_lon, _lat, _mke_data, all_labels, hemisphere,
                         plot_mode='diff', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                        fig_name=str(fig_dir / 'MKE_map_diff.png'))
+                        fig_name=str(fig_dir / 'sidrift_mke_mean_map_diff.png'))
 
-        if all(('MKE_ano' in d) for d in _all_dicts):
-            _mke_std_maps = np.array([np.nanstd(d['MKE_ano'], axis=0) for d in _all_dicts])
+        if all(('MKE_ano_std_map' in d) for d in _all_dicts):
+            _mke_std_maps = np.array([np.asarray(d['MKE_ano_std_map'], dtype=float) for d in _all_dicts])
             _std_max = max(0.001, round(float(np.nanpercentile(_mke_std_maps[0], 95)) * 1000) / 1000)
             pf.plot_SIC_map(grid_file, _mke_std_maps, all_labels, hemisphere,
                             sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                             sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit=r'$m^2/s^2$',
-                            plot_mode='raw', fig_name=str(fig_dir / 'MKE_std_map_raw.png'))
+                            plot_mode='raw', fig_name=str(fig_dir / 'sidrift_mke_dstd_map_raw.png'))
             pf.plot_SIC_map(grid_file, _mke_std_maps, all_labels, hemisphere,
                             sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                             sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit=r'$m^2/s^2$',
-                            plot_mode='diff', fig_name=str(fig_dir / 'MKE_std_map_diff.png'))
+                            plot_mode='diff', fig_name=str(fig_dir / 'sidrift_mke_dstd_map_diff.png'))
 
         if all(('MKE_ano_tr' in d) for d in _all_dicts):
             _mke_tr_maps = np.array([d['MKE_ano_tr'] for d in _all_dicts])
@@ -1621,13 +1847,18 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             _tr_max = max(0.001, round(float(np.nanpercentile(np.abs(_mke_tr_maps[0]), 95)) * 1000) / 1000)
             pf.plot_trend_map(grid_file, _mke_tr_maps, _mke_tr_pval, all_labels, hemisphere,
                               trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit=r'$m^2/s^2$/decade',
-                              plot_mode='raw', fig_name=str(fig_dir / 'MKE_trend_map_raw.png'))
+                              plot_mode='raw', fig_name=str(fig_dir / 'sidrift_mke_trend_map_raw.png'))
             pf.plot_trend_map(grid_file, _mke_tr_maps, _mke_tr_pval, all_labels, hemisphere,
                               trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit=r'$m^2/s^2$/decade',
-                              plot_mode='diff', fig_name=str(fig_dir / 'MKE_trend_map_diff.png'))
+                              plot_mode='diff', fig_name=str(fig_dir / 'sidrift_mke_trend_map_diff.png'))
 
         _season_names = ['Spring', 'Summer', 'Autumn', 'Winter']
 
+        # -----------------------------------------------------------------------------
+        # Function: `_stack_sid_season_maps`.
+        # Purpose: Handle stack sid season maps workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _stack_sid_season_maps(diag_list: List[Dict[str, Any]], key: str) -> Optional[np.ndarray]:
             arrs = [np.asarray(d.get(key, np.array([])), dtype=float) for d in diag_list]
             if not arrs or any(a.ndim != 2 for a in arrs):
@@ -1645,12 +1876,12 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_MKE_map(
                     _lon, _lat, _clim_stack, all_labels, hemisphere,
                     plot_mode='raw', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                    fig_name=str(fig_dir / f'SID_seasonal_clim_{_season}_raw.png'),
+                    fig_name=str(fig_dir / f'sidrift_sid_clim_map_{_season}_raw.png'),
                 )
                 pf.plot_MKE_map(
                     _lon, _lat, _clim_stack, all_labels, hemisphere,
                     plot_mode='diff', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                    fig_name=str(fig_dir / f'SID_seasonal_clim_{_season}_diff.png'),
+                    fig_name=str(fig_dir / f'sidrift_sid_clim_map_{_season}_diff.png'),
                 )
 
             _std_stack = _stack_sid_season_maps(_diags, 'std_map')
@@ -1660,13 +1891,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     grid_file, _std_stack, all_labels, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m/s',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SID_seasonal_std_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sidrift_sid_dstd_map_{_season}_raw.png'),
                 )
                 pf.plot_SIC_map(
                     grid_file, _std_stack, all_labels, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m/s',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SID_seasonal_std_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sidrift_sid_dstd_map_{_season}_diff.png'),
                 )
 
             _tr_stack = _stack_sid_season_maps(_diags, 'trend_map')
@@ -1676,22 +1907,30 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, all_labels, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/s/decade',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SID_seasonal_trend_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sidrift_sid_trend_map_{_season}_raw.png'),
                 )
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, all_labels, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/s/decade',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SID_seasonal_trend_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sidrift_sid_trend_map_{_season}_diff.png'),
                 )
 
-        _sid_keys = ['MKE_mean_diff', 'MKE_std_diff', 'MKE_ts_ano_std', 'MKE_trend_diff', 'MKE_ts_trend_diff']
+        _sid_key_specs: List[Tuple[str, str]] = [
+            ('MKE_mean_diff', 'MKE Mean MAE[Map]'),
+            ('MKE_std_map_diff_detrended', 'MKE DStd MAE[Map]'),
+            ('MKE_ts_ano_std_diff_detrended', 'MKE DStd AbsDiff[TS-Ano]'),
+            ('MKE_trend_diff', 'MKE Trend MAE[Map]'),
+            ('MKE_ts_trend_diff', 'MKE Trend AbsDiff[TS-Ano]'),
+        ]
+        _sid_keys = [kk for kk, _ in _sid_key_specs]
+        _sid_labels = [ll for _, ll in _sid_key_specs]
         _sid_season_core = [
-            'MeanDiff',
-            'AnoStdDiff',
-            'AnoTrendDiff',
-            'StdMapDiff',
-            'TrendMapDiff',
-            'RMSE',
+            'Mean MAE[Map]',
+            'DStd AbsDiff[TS-Ano]',
+            'Trend AbsDiff[TS-Ano]',
+            'DStd MAE[Map]',
+            'Trend MAE[Map]',
+            'RMSE[TS-Ano]',
         ]
         _sid_season_keys: List[str] = []
         for _season in _season_names:
@@ -1711,37 +1950,43 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_VectCorr_map(
                     _lon, _lat, np.asarray(_vcorr_data, dtype=float), _vcorr_labels, hemisphere,
                     data_cm=vectcorr_cmap, unit='Vector Correlation',
-                    fig_name=str(fig_dir / 'VectCorr_map.png'),
+                    fig_name=str(fig_dir / 'sidrift_vectcorr_map_diff.png'),
                 )
 
             _sid_heat = np.array([[d.get(k, float('nan')) for k in _sid_keys] for d in diff_dicts])
+            _sid_cbar_kw = _heatmap_main_cbar_kwargs(len(_sid_keys), len(diff_dicts))
             with _PLOT_LOCK:
-                _fig, _ax = plt.subplots(
-                    figsize=(
-                        max(8, len(_sid_keys) * 0.8),
-                        max(3, 1 + len(diff_dicts)) * max(0.1, heat_main_height_scale),
-                    )
-                )
+                _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                    len(_sid_keys), len(diff_dicts), heat_main_height_scale
+                ))
                 if obs_diff_dict is not None:
                     _obs2_row = np.array([abs(obs_diff_dict.get(k, float('nan'))) for k in _sid_keys])
                     pf.plot_heat_map(
-                        _sid_heat, model_labels, _sid_keys, ax=_ax,
-                        cbarlabel='Ratio to obs uncertainty',
+                        _sid_heat, model_labels, _sid_labels, ax=_ax,
+                        cbarlabel='Ratio',
                         obs_row=_obs2_row, obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
+                        cbar_kw=_sid_cbar_kw,
                     )
                 else:
-                    pf.plot_heat_map(_sid_heat, model_labels, _sid_keys, ax=_ax, cbarlabel=r'$m^2/s^2$', cmap=heatmap_cmap)
-                _fig.tight_layout()
-                pf._save_fig(str(fig_dir / 'heat_map.png'), close=False)
+                    pf.plot_heat_map(
+                        _sid_heat, model_labels, _sid_labels, ax=_ax,
+                        cbarlabel=r'$m^2/s^2$', cmap=heatmap_cmap, cbar_kw=_sid_cbar_kw,
+                    )
+                _fig.subplots_adjust(**_heatmap_main_adjust(
+                    n_models=len(diff_dicts),
+                    n_metrics=len(_sid_keys),
+                ))
+                pf._save_fig(str(fig_dir / 'sidrift_metrics_heatmap_diff.png'), close=False)
                 plt.close(_fig)
 
             _sid_heat_season = []
             for _dct in diff_dicts:
                 _row = []
                 for _season in _season_names:
-                    md, sd, td, sm, tm, vc, cc, rr = _sid_extract_domain_extended_stats(
+                    md, sd, td, sm, tm, _, _, rr = _sid_extract_domain_extended_stats(
                         _dct, ('season', _season), hemisphere
                     )
                     _row.extend([md, sd, td, sm, tm, rr])
@@ -1750,14 +1995,10 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             if _sid_heat_season.size > 0:
                 with _PLOT_LOCK:
                     _n_metric = len(_sid_season_core)
-                    _n_rows = max(1, 1 + len(diff_dicts))
-                    _panel_w = max(8.0, _n_metric * 0.76)
-                    _panel_h = max(3.2, _n_rows * 0.45 + 1.1)
                     _fig, _axes = plt.subplots(
                         2, 2,
-                        figsize=(
-                            _panel_w * 2.0 + 1.0,
-                            (_panel_h * 2.0 + 0.4) * max(0.5, heat_season_height_scale),
+                        figsize=_heatmap_seasonal_figsize(
+                            _n_metric, len(diff_dicts), heat_season_height_scale
                         ),
                         squeeze=False,
                     )
@@ -1768,7 +2009,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     if obs_diff_dict is not None:
                         _obs2_row = []
                         for _season in _season_names:
-                            md, sd, td, sm, tm, vc, cc, rr = _sid_extract_domain_extended_stats(
+                            md, sd, td, sm, tm, _, _, rr = _sid_extract_domain_extended_stats(
                                 obs_diff_dict, ('season', _season), hemisphere
                             )
                             _obs2_row.extend([md, sd, td, sm, tm, rr])
@@ -1790,8 +2031,11 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                             obs_row_label=obs2_plot_label,
                             ratio_vmin=heat_ratio_vmin,
                             ratio_vmax=heat_ratio_vmax,
+                            display_transform='lin2021_norm',
                             cmap=heatmap_cmap,
                             add_colorbar=False,
+                            show_xticklabels=(_ii >= 2),
+                            show_yticklabels=(_ii % 2 == 0),
                         )
                         _ax.set_title(str(_season), fontsize=17, pad=8)
                         _used_axes.append(_ax)
@@ -1801,34 +2045,34 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     for _jj in range(len(_season_names), len(_axes_flat)):
                         _fig.delaxes(_axes_flat[_jj])
 
-                    if _first_im is not None and _used_axes:
-                        _cb = _fig.colorbar(
-                            _first_im,
-                            ax=_used_axes,
-                            orientation='vertical',
-                            fraction=max(0.001, heat_season_cbar_fraction),
-                            pad=max(0.0, heat_season_cbar_pad),
-                            aspect=max(1.0, heat_season_cbar_aspect),
-                            extend=pf._resolve_colorbar_extend(
-                                _first_im,
-                                data=np.abs(_sid_heat_season),
-                                vmin=heat_ratio_vmin,
-                                vmax=heat_ratio_vmax,
-                                extend='auto',
-                            ),
-                        )
-                        _cb.set_label('Ratio to obs uncertainty', fontsize=16)
-                        _cb.ax.tick_params(labelsize=15)
-
-                    _fig.subplots_adjust(
-                        left=0.06,
-                        right=min(0.98, max(0.70, heat_season_right)),
-                        top=0.93,
-                        bottom=0.10,
-                        wspace=max(0.0, heat_season_wspace),
-                        hspace=max(0.0, heat_season_hspace),
+                    _adj_kw = _heatmap_seasonal_adjust(
+                        n_models=len(diff_dicts),
+                        n_metrics=_n_metric,
+                        wspace=heat_season_wspace,
+                        hspace=heat_season_hspace,
+                        right_margin=heat_season_right,
                     )
-                    pf._save_fig(str(fig_dir / 'heat_map_seasonal.png'), close=False)
+                    _fig.subplots_adjust(**_adj_kw)
+                    if _first_im is not None and _used_axes:
+                        _cb_kw = _heatmap_seasonal_cbar_kwargs(
+                            n_metrics=_n_metric,
+                            n_models=len(diff_dicts),
+                            fraction=heat_season_cbar_fraction,
+                            pad=heat_season_cbar_pad,
+                            aspect=heat_season_cbar_aspect,
+                        )
+                        pf._bottom_cbar(
+                            _fig,
+                            _first_im,
+                            _used_axes,
+                            label='Ratio',
+                            extend='auto',
+                            fraction=_cb_kw['fraction'],
+                            pad=_cb_kw['pad'],
+                            aspect=_cb_kw['aspect'],
+                            data=np.abs(_sid_heat_season),
+                        )
+                    pf._save_fig(str(fig_dir / 'sidrift_metrics_heatmap_seasonal_diff.png'), close=False)
                     plt.close(_fig)
 
         _sid_map_data = np.array([[d['u_clim'], d['v_clim']] for d in _all_dicts])
@@ -1843,7 +2087,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             quiver_scale=vector_quiver_scale,
             quiver_width=vector_quiver_width,
             quiver_min_speed=vector_quiver_min_speed,
-            fig_name=str(fig_dir / 'SID_map.png')
+            fig_name=str(fig_dir / 'sidrift_sid_vector_map_raw.png')
         )
 
         if matched_diff_dicts:
@@ -1881,13 +2125,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
 
                 pf.plot_SID_ts(
                     matched_obs_list, matched_model_dicts, matched_panel_labels,
-                    fig_name=str(fig_dir / 'SID_ts_matched.png'),
+                    fig_name=str(fig_dir / 'sidrift_sid_ts_matched_raw.png'),
                     line_style=line_styles, color=line_colors,
                 )
                 pf.plot_SID_ano(
                     matched_obs_list, matched_model_dicts, matched_panel_labels,
                     module_vars['year_range'],
-                    fig_name=str(fig_dir / 'SID_ano_matched.png'),
+                    fig_name=str(fig_dir / 'sidrift_sid_ano_ts_matched_raw.png'),
                     hms=hemisphere,
                     line_style=line_styles, color=line_colors,
                 )
@@ -1897,7 +2141,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                         matched_obs_list, matched_model_dicts, matched_panel_labels,
                         module_vars['year_range'],
                         month=month, hms=hemisphere,
-                        fig_name=str(fig_dir / f'sidrift_ano_timeseries_{mtag}_matched.png'),
+                        fig_name=str(fig_dir / f'sidrift_sid_ano_ts_{mtag}_matched_raw.png'),
                         line_style=line_styles, color=line_colors,
                         legend_y_gap=key_month_legend_gap,
                     )
@@ -1907,7 +2151,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                             [obs1_plot_label] + ([obs2_plot_label] if obs_diff_dict_matched is not None else []) + matched_group_labels,
                             module_vars['year_range'],
                             month=month, hms=hemisphere,
-                            fig_name=str(fig_dir / f'sidrift_ano_timeseries_{mtag}_matched_groupmean.png'),
+                            fig_name=str(fig_dir / f'sidrift_sid_ano_ts_{mtag}_matched_groupmean_raw.png'),
                             line_style=line_styles, color=line_colors,
                             legend_y_gap=key_month_legend_gap,
                             model_spread_payloads=matched_group_model_stds_for_ts,
@@ -1917,14 +2161,14 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     matched_group_panel_labels = [obs1_plot_label] + ([obs2_plot_label] if obs_diff_dict_matched is not None else []) + matched_group_labels
                     pf.plot_SID_ts(
                         matched_obs_list, matched_group_model_means_for_ts, matched_group_panel_labels,
-                        fig_name=str(fig_dir / 'SID_ts_matched_groupmean.png'),
+                        fig_name=str(fig_dir / 'sidrift_sid_ts_matched_groupmean_raw.png'),
                         line_style=line_styles, color=line_colors,
                         model_spread_payloads=matched_group_model_stds_for_ts,
                     )
                     pf.plot_SID_ano(
                         matched_obs_list, matched_group_model_means_for_ts, matched_group_panel_labels,
                         module_vars['year_range'],
-                        fig_name=str(fig_dir / 'SID_ano_matched_groupmean.png'),
+                        fig_name=str(fig_dir / 'sidrift_sid_ano_ts_matched_groupmean_raw.png'),
                         hms=hemisphere,
                         line_style=line_styles, color=line_colors,
                         model_spread_payloads=matched_group_model_stds_for_ts,
@@ -1935,28 +2179,30 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_MKE_map(
                     _lon, _lat, _mke_data_matched, matched_panel_labels, hemisphere,
                     plot_mode='raw', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                    fig_name=str(fig_dir / 'MKE_map_matched_raw.png'),
+                    fig_name=str(fig_dir / 'sidrift_mke_mean_map_matched_raw.png'),
                 )
                 pf.plot_MKE_map(
                     _lon, _lat, _mke_data_matched, matched_panel_labels, hemisphere,
                     plot_mode='diff', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                    fig_name=str(fig_dir / 'MKE_map_matched_diff.png'),
+                    fig_name=str(fig_dir / 'sidrift_mke_mean_map_matched_diff.png'),
                 )
 
-                if all(('MKE_ano' in d) for d in _all_dicts_matched):
-                    _mke_std_maps_matched = np.array([np.nanstd(d['MKE_ano'], axis=0) for d in _all_dicts_matched])
+                if all(('MKE_ano_std_map' in d) for d in _all_dicts_matched):
+                    _mke_std_maps_matched = np.array([
+                        np.asarray(d['MKE_ano_std_map'], dtype=float) for d in _all_dicts_matched
+                    ])
                     _std_max_matched = max(0.001, round(float(np.nanpercentile(_mke_std_maps_matched[0], 95)) * 1000) / 1000)
                     pf.plot_SIC_map(
                         grid_file, _mke_std_maps_matched, matched_panel_labels, hemisphere,
                         sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit=r'$m^2/s^2$',
-                        plot_mode='raw', fig_name=str(fig_dir / 'MKE_std_map_matched_raw.png'),
+                        plot_mode='raw', fig_name=str(fig_dir / 'sidrift_mke_dstd_map_matched_raw.png'),
                     )
                     pf.plot_SIC_map(
                         grid_file, _mke_std_maps_matched, matched_panel_labels, hemisphere,
                         sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit=r'$m^2/s^2$',
-                        plot_mode='diff', fig_name=str(fig_dir / 'MKE_std_map_matched_diff.png'),
+                        plot_mode='diff', fig_name=str(fig_dir / 'sidrift_mke_dstd_map_matched_diff.png'),
                     )
 
                 if all(('MKE_ano_tr' in d) for d in _all_dicts_matched):
@@ -1966,12 +2212,12 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     pf.plot_trend_map(
                         grid_file, _mke_tr_maps_matched, _mke_tr_pval_matched, matched_panel_labels, hemisphere,
                         trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit=r'$m^2/s^2$/decade',
-                        plot_mode='raw', fig_name=str(fig_dir / 'MKE_trend_map_matched_raw.png'),
+                        plot_mode='raw', fig_name=str(fig_dir / 'sidrift_mke_trend_map_matched_raw.png'),
                     )
                     pf.plot_trend_map(
                         grid_file, _mke_tr_maps_matched, _mke_tr_pval_matched, matched_panel_labels, hemisphere,
                         trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit=r'$m^2/s^2$/decade',
-                        plot_mode='diff', fig_name=str(fig_dir / 'MKE_trend_map_matched_diff.png'),
+                        plot_mode='diff', fig_name=str(fig_dir / 'sidrift_mke_trend_map_matched_diff.png'),
                     )
 
                 for _season in _season_names:
@@ -1982,12 +2228,12 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                         pf.plot_MKE_map(
                             _lon, _lat, _clim_stack_matched, matched_panel_labels, hemisphere,
                             plot_mode='raw', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                            fig_name=str(fig_dir / f'SID_seasonal_clim_{_season}_matched_raw.png'),
+                            fig_name=str(fig_dir / f'sidrift_sid_clim_map_{_season}_matched_raw.png'),
                         )
                         pf.plot_MKE_map(
                             _lon, _lat, _clim_stack_matched, matched_panel_labels, hemisphere,
                             plot_mode='diff', raw_cmap=mke_raw_cmap, diff_cmap=mke_diff_cmap,
-                            fig_name=str(fig_dir / f'SID_seasonal_clim_{_season}_matched_diff.png'),
+                            fig_name=str(fig_dir / f'sidrift_sid_clim_map_{_season}_matched_diff.png'),
                         )
 
                     _std_stack_matched = _stack_sid_season_maps(_diags_matched, 'std_map')
@@ -1997,13 +2243,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                             grid_file, _std_stack_matched, matched_panel_labels, hemisphere,
                             sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                             sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m/s',
-                            plot_mode='raw', fig_name=str(fig_dir / f'SID_seasonal_std_{_season}_matched_raw.png'),
+                            plot_mode='raw', fig_name=str(fig_dir / f'sidrift_sid_dstd_map_{_season}_matched_raw.png'),
                         )
                         pf.plot_SIC_map(
                             grid_file, _std_stack_matched, matched_panel_labels, hemisphere,
                             sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                             sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m/s',
-                            plot_mode='diff', fig_name=str(fig_dir / f'SID_seasonal_std_{_season}_matched_diff.png'),
+                            plot_mode='diff', fig_name=str(fig_dir / f'sidrift_sid_dstd_map_{_season}_matched_diff.png'),
                         )
 
                     _tr_stack_matched = _stack_sid_season_maps(_diags_matched, 'trend_map')
@@ -2013,12 +2259,12 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                         pf.plot_trend_map(
                             grid_file, _tr_stack_matched, _trp_stack_matched, matched_panel_labels, hemisphere,
                             trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/s/decade',
-                            plot_mode='raw', fig_name=str(fig_dir / f'SID_seasonal_trend_{_season}_matched_raw.png'),
+                            plot_mode='raw', fig_name=str(fig_dir / f'sidrift_sid_trend_map_{_season}_matched_raw.png'),
                         )
                         pf.plot_trend_map(
                             grid_file, _tr_stack_matched, _trp_stack_matched, matched_panel_labels, hemisphere,
                             trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/s/decade',
-                            plot_mode='diff', fig_name=str(fig_dir / f'SID_seasonal_trend_{_season}_matched_diff.png'),
+                            plot_mode='diff', fig_name=str(fig_dir / f'sidrift_sid_trend_map_{_season}_matched_diff.png'),
                         )
 
                 _vcorr_data_matched: List[np.ndarray] = []
@@ -2032,40 +2278,44 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     pf.plot_VectCorr_map(
                         _lon, _lat, np.asarray(_vcorr_data_matched, dtype=float), _vcorr_labels_matched, hemisphere,
                         data_cm=vectcorr_cmap, unit='Vector Correlation',
-                        fig_name=str(fig_dir / 'VectCorr_map_matched.png'),
+                        fig_name=str(fig_dir / 'sidrift_vectcorr_map_matched_diff.png'),
                     )
 
                 _sid_heat_matched = np.array([[d.get(k, float('nan')) for k in _sid_keys] for d in matched_diffs_for_plot])
+                _sid_cbar_kw_matched = _heatmap_main_cbar_kwargs(len(_sid_keys), len(matched_diffs_for_plot))
                 with _PLOT_LOCK:
-                    _fig, _ax = plt.subplots(
-                        figsize=(
-                            max(8, len(_sid_keys) * 0.8),
-                            max(3, 1 + len(matched_diffs_for_plot)) * max(0.1, heat_main_height_scale),
-                        )
-                    )
+                    _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                        len(_sid_keys), len(matched_diffs_for_plot), heat_main_height_scale
+                    ))
                     if obs_diff_dict_matched is not None:
                         _obs2_row = np.array([abs(obs_diff_dict_matched.get(k, float('nan'))) for k in _sid_keys])
                         pf.plot_heat_map(
-                            _sid_heat_matched, matched_labels_for_plot, _sid_keys, ax=_ax,
-                            cbarlabel='Ratio to obs uncertainty',
+                            _sid_heat_matched, matched_labels_for_plot, _sid_labels, ax=_ax,
+                            cbarlabel='Ratio',
                             obs_row=_obs2_row, obs_row_label=obs2_plot_label,
                             ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                            display_transform='lin2021_norm',
                             cmap=heatmap_cmap,
+                            cbar_kw=_sid_cbar_kw_matched,
                         )
                     else:
                         pf.plot_heat_map(
-                            _sid_heat_matched, matched_labels_for_plot, _sid_keys,
+                            _sid_heat_matched, matched_labels_for_plot, _sid_labels,
                             ax=_ax, cbarlabel=r'$m^2/s^2$', cmap=heatmap_cmap,
+                            cbar_kw=_sid_cbar_kw_matched,
                         )
-                    _fig.tight_layout()
-                    pf._save_fig(str(fig_dir / 'heat_map_matched.png'), close=False)
+                    _fig.subplots_adjust(**_heatmap_main_adjust(
+                        n_models=len(matched_diffs_for_plot),
+                        n_metrics=len(_sid_keys),
+                    ))
+                    pf._save_fig(str(fig_dir / 'sidrift_metrics_heatmap_matched_diff.png'), close=False)
                     plt.close(_fig)
 
                 _sid_heat_season_matched = []
                 for _dct in matched_diffs_for_plot:
                     _row = []
                     for _season in _season_names:
-                        md, sd, td, sm, tm, vc, cc, rr = _sid_extract_domain_extended_stats(
+                        md, sd, td, sm, tm, _, _, rr = _sid_extract_domain_extended_stats(
                             _dct, ('season', _season), hemisphere
                         )
                         _row.extend([md, sd, td, sm, tm, rr])
@@ -2074,14 +2324,10 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                 if _sid_heat_season_matched.size > 0:
                     with _PLOT_LOCK:
                         _n_metric = len(_sid_season_core)
-                        _n_rows = max(1, 1 + len(matched_diffs_for_plot))
-                        _panel_w = max(8.0, _n_metric * 0.76)
-                        _panel_h = max(3.2, _n_rows * 0.45 + 1.1)
                         _fig, _axes = plt.subplots(
                             2, 2,
-                            figsize=(
-                                _panel_w * 2.0 + 1.0,
-                                (_panel_h * 2.0 + 0.4) * max(0.5, heat_season_height_scale),
+                            figsize=_heatmap_seasonal_figsize(
+                                _n_metric, len(matched_diffs_for_plot), heat_season_height_scale
                             ),
                             squeeze=False,
                         )
@@ -2092,7 +2338,7 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                         if obs_diff_dict_matched is not None:
                             _obs2_row = []
                             for _season in _season_names:
-                                md, sd, td, sm, tm, vc, cc, rr = _sid_extract_domain_extended_stats(
+                                md, sd, td, sm, tm, _, _, rr = _sid_extract_domain_extended_stats(
                                     obs_diff_dict_matched, ('season', _season), hemisphere
                                 )
                                 _obs2_row.extend([md, sd, td, sm, tm, rr])
@@ -2114,8 +2360,11 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                                 obs_row_label=obs2_plot_label,
                                 ratio_vmin=heat_ratio_vmin,
                                 ratio_vmax=heat_ratio_vmax,
+                                display_transform='lin2021_norm',
                                 cmap=heatmap_cmap,
                                 add_colorbar=False,
+                                show_xticklabels=(_ii >= 2),
+                                show_yticklabels=(_ii % 2 == 0),
                             )
                             _ax.set_title(str(_season), fontsize=17, pad=8)
                             _used_axes.append(_ax)
@@ -2125,34 +2374,34 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                         for _jj in range(len(_season_names), len(_axes_flat)):
                             _fig.delaxes(_axes_flat[_jj])
 
-                        if _first_im is not None and _used_axes:
-                            _cb = _fig.colorbar(
-                                _first_im,
-                                ax=_used_axes,
-                                orientation='vertical',
-                                fraction=max(0.001, heat_season_cbar_fraction),
-                                pad=max(0.0, heat_season_cbar_pad),
-                                aspect=max(1.0, heat_season_cbar_aspect),
-                                extend=pf._resolve_colorbar_extend(
-                                    _first_im,
-                                    data=np.abs(_sid_heat_season_matched),
-                                    vmin=heat_ratio_vmin,
-                                    vmax=heat_ratio_vmax,
-                                    extend='auto',
-                                ),
-                            )
-                            _cb.set_label('Ratio to obs uncertainty', fontsize=16)
-                            _cb.ax.tick_params(labelsize=15)
-
-                        _fig.subplots_adjust(
-                            left=0.06,
-                            right=min(0.98, max(0.70, heat_season_right)),
-                            top=0.93,
-                            bottom=0.10,
-                            wspace=max(0.0, heat_season_wspace),
-                            hspace=max(0.0, heat_season_hspace),
+                        _adj_kw = _heatmap_seasonal_adjust(
+                            n_models=len(matched_diffs_for_plot),
+                            n_metrics=_n_metric,
+                            wspace=heat_season_wspace,
+                            hspace=heat_season_hspace,
+                            right_margin=heat_season_right,
                         )
-                        pf._save_fig(str(fig_dir / 'heat_map_seasonal_matched.png'), close=False)
+                        _fig.subplots_adjust(**_adj_kw)
+                        if _first_im is not None and _used_axes:
+                            _cb_kw = _heatmap_seasonal_cbar_kwargs(
+                                n_metrics=_n_metric,
+                                n_models=len(matched_diffs_for_plot),
+                                fraction=heat_season_cbar_fraction,
+                                pad=heat_season_cbar_pad,
+                                aspect=heat_season_cbar_aspect,
+                            )
+                            pf._bottom_cbar(
+                                _fig,
+                                _first_im,
+                                _used_axes,
+                                label='Ratio',
+                                extend='auto',
+                                fraction=_cb_kw['fraction'],
+                                pad=_cb_kw['pad'],
+                                aspect=_cb_kw['aspect'],
+                                data=np.abs(_sid_heat_season_matched),
+                            )
+                        pf._save_fig(str(fig_dir / 'sidrift_metrics_heatmap_seasonal_matched_diff.png'), close=False)
                         plt.close(_fig)
 
                 _sid_map_data_matched = np.array([[d['u_clim'], d['v_clim']] for d in _all_dicts_matched])
@@ -2163,13 +2412,13 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
                     quiver_scale=vector_quiver_scale,
                     quiver_width=vector_quiver_width,
                     quiver_min_speed=vector_quiver_min_speed,
-                    fig_name=str(fig_dir / 'SID_map_matched.png')
+                    fig_name=str(fig_dir / 'sidrift_sid_vector_map_matched_raw.png')
                 )
         try:
             pf.plot_sic_region_map(
                 grid_nc_file=grid_file,
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+                fig_name=str(fig_dir / 'geo_sector_map.png'),
             )
         except Exception as exc:
             logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -2211,6 +2460,11 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
     }
     sid_extra_tables: List[Dict[str, Any]] = []
 
+    # -----------------------------------------------------------------------------
+    # Function: `_fmt_sid_summary_scientific`.
+    # Purpose: Handle fmt sid summary scientific workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _fmt_sid_summary_scientific(v: float, sig_digits: int = 3) -> str:
         if not np.isfinite(v):
             return '--'
@@ -2222,6 +2476,11 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
         mantissa = mantissa.rstrip('0').rstrip('.')
         return f'{mantissa}e{int(exp):+d}'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sid_ano_summary_rows`.
+    # Purpose: Handle sid ano summary rows workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _sid_ano_summary_rows(metrics_list: List[dict], labels_list: List[str]) -> List[List[str]]:
         rows: List[List[str]] = []
         for label, metric_dict in zip(labels_list, metrics_list):
@@ -2230,25 +2489,20 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             series = np.asarray(metric_dict.get('MKE_ts_ano', np.array([])), dtype=float).reshape(-1)
             valid = np.isfinite(series)
             if int(np.sum(valid)) < 2:
-                std_val = np.nan
-                trend_val = np.nan
                 dstd_val = np.nan
+                trend_val = np.nan
             else:
                 series_v = series[valid]
-                std_val = float(np.nanstd(series_v))
+                dstd_val = utils.detrended_std_1d(series_v)
                 x_fit = np.arange(series.size, dtype=float)
                 coef = np.polyfit(x_fit[valid], series[valid], 1)
                 slope = float(coef[0])
-                intercept = float(coef[1])
                 trend_val = float(slope * 12.0 * 10.0)
-                detrended = series_v - (slope * x_fit[valid] + intercept)
-                dstd_val = float(np.nanstd(detrended))
 
             rows.append([
                 str(label),
-                _fmt_sid_summary_scientific(std_val),
-                _fmt_sid_summary_scientific(trend_val),
                 _fmt_sid_summary_scientific(dstd_val),
+                _fmt_sid_summary_scientific(trend_val),
             ])
         return rows
 
@@ -2257,12 +2511,32 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
         [obs1_plot_label] + ([obs2_plot_label] if isinstance(obs2_dict, dict) else []) + list(model_labels),
     )
     if _base_ano_rows:
+        _ano_summary_meta = [
+            _metric_meta(
+                'sid.speed.dstd.ts.raw',
+                'DStd[TS-Ano] Raw',
+                long_label='Detrended std of anomaly time series (raw value)',
+                scope='TS-Ano',
+                stat='DStd',
+                op='Raw',
+                std_type='detrended',
+            ),
+            _metric_meta(
+                'sid.speed.trend.ts.raw',
+                'Trend[TS-Ano] Raw',
+                long_label='Trend of anomaly time series (raw value)',
+                scope='TS-Ano',
+                stat='Trend',
+                op='Raw',
+            ),
+        ]
         sid_extra_tables.append({
             'type': 'basic_table',
             'coverage_mode': 'base',
             'title': 'SID Anomaly Summary (Original Coverage)',
-            'headers': ['Dataset', 'STD', 'Trend (per decade)', 'Detrended STD'],
-            'units': ['', 'm²/s²', 'm²/s²/decade', 'm²/s²'],
+            'headers': ['Dataset'] + [m['short_label'] for m in _ano_summary_meta],
+            'units': ['', 'm²/s²', 'm²/s²/decade'],
+            'metric_meta': _ano_summary_meta,
             'rows': _base_ano_rows,
         })
 
@@ -2326,12 +2600,32 @@ def eval_sidrift(case_name: str, recipe: RR.RecipeReader,
             [obs1_plot_label] + ([obs2_plot_label] if isinstance(matched_obs2_metric, dict) else []) + list(matched_model_labels),
         )
         if _matched_ano_rows:
+            _ano_summary_meta = [
+                _metric_meta(
+                    'sid.speed.dstd.ts.raw',
+                    'DStd[TS-Ano] Raw',
+                    long_label='Detrended std of anomaly time series (raw value)',
+                    scope='TS-Ano',
+                    stat='DStd',
+                    op='Raw',
+                    std_type='detrended',
+                ),
+                _metric_meta(
+                    'sid.speed.trend.ts.raw',
+                    'Trend[TS-Ano] Raw',
+                    long_label='Trend of anomaly time series (raw value)',
+                    scope='TS-Ano',
+                    stat='Trend',
+                    op='Raw',
+                ),
+            ]
             sid_extra_tables.append({
                 'type': 'basic_table',
                 'coverage_mode': 'matched',
                 'title': 'SID Anomaly Summary (Obs-Matched Coverage)',
-                'headers': ['Dataset', 'STD', 'Trend (per decade)', 'Detrended STD'],
-                'units': ['', 'm²/s²', 'm²/s²/decade', 'm²/s²'],
+                'headers': ['Dataset'] + [m['short_label'] for m in _ano_summary_meta],
+                'units': ['', 'm²/s²', 'm²/s²/decade'],
+                'metric_meta': _ano_summary_meta,
                 'rows': _matched_ano_rows,
             })
 

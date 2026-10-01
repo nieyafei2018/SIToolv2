@@ -24,6 +24,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         hemisphere (str): Hemisphere, 'nh' for Northern or 'sh' for Southern.
         metric (str): Statistical metric for comparisons ('MAE', 'RMSE', etc.).
     """
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, hemisphere: str = None, metric: str = 'MAE') -> None:
         """Initialize the SIconcMetrics calculator.
 
@@ -34,6 +39,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         """
         super().__init__(grid_file, hemisphere, metric)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_season_months`.
+    # Purpose: Handle season months workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
         """Return canonical season -> month mapping for one hemisphere."""
@@ -52,6 +62,11 @@ class SIconcMetrics(SeaIceMetricsBase):
             'winter': (12, 1, 2),        # DJF
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `_seasonal_mean_series`.
+    # Purpose: Handle seasonal mean series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _seasonal_mean_series(monthly_series: np.ndarray, months: Tuple[int, ...]) -> np.ndarray:
         """Return year-wise seasonal means (weighted by month length)."""
@@ -89,6 +104,11 @@ class SIconcMetrics(SeaIceMetricsBase):
 
         return np.asarray(out, dtype=float)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_subset_period_series`.
+    # Purpose: Handle subset period series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _subset_period_series(self, monthly_series: np.ndarray, period: str) -> np.ndarray:
         """Return a 1-D series for annual/season/key-month diagnostics."""
         period_key = str(period or '').strip().lower()
@@ -108,16 +128,31 @@ class SIconcMetrics(SeaIceMetricsBase):
             return self._seasonal_mean_series(np.asarray(monthly_series, dtype=float), season_map[period_key])
         raise ValueError(f"Unsupported period: {period}")
 
+    # -----------------------------------------------------------------------------
+    # Function: `_extract_month_series`.
+    # Purpose: Handle extract month series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _extract_month_series(monthly_series: np.ndarray, month: int) -> np.ndarray:
         """Return month-filtered 1-D series (month is 1-12)."""
         return np.asarray(monthly_series[int(month) - 1::12], dtype=float)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_month_clim_from_series`.
+    # Purpose: Handle month clim from series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _month_clim_from_series(field_ts: np.ndarray, month: int) -> np.ndarray:
         """Return climatological map for a selected calendar month."""
         return np.nanmean(field_ts[int(month) - 1::12, :, :], axis=0)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_detrended_std_and_trend_map`.
+    # Purpose: Handle detrended std and trend map workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _detrended_std_and_trend_map(field_ts: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Calculate detrended STD and trend (per decade) for a yearly map series.
@@ -147,6 +182,11 @@ class SIconcMetrics(SeaIceMetricsBase):
                 p_map[jx, jy] = reg.pvalue
         return std_map, trend_map, p_map
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calc_month_series_skill`.
+    # Purpose: Handle calc month series skill workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _calc_month_series_skill(series_ref: np.ndarray, series_cmp: np.ndarray) -> Dict[str, float]:
         """Return Corr/RMSE between two month-filtered 1-D anomaly series."""
@@ -159,6 +199,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         rmse = float(np.sqrt(np.nanmean((y2[valid] - y1[valid]) ** 2)))
         return {'corr': corr, 'rmse': rmse}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_build_key_month_products`.
+    # Purpose: Handle build key month products workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _build_key_month_products(self, siconc: np.ndarray,
                                   SIA_ano: np.ndarray,
                                   SIE_ano: np.ndarray,
@@ -193,6 +238,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         out['key_months'] = np.array(key_months, dtype=int)
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_build_key_month_diff`.
+    # Purpose: Handle build key month diff workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _build_key_month_diff(self, sic1: Dict[str, np.ndarray],
                               sic2: Dict[str, np.ndarray]) -> Dict[str, float]:
         """Build month-specific spatial/scalar differences and anomaly-series skill."""
@@ -227,6 +277,11 @@ class SIconcMetrics(SeaIceMetricsBase):
 
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calc_series_stats`.
+    # Purpose: Handle calc series stats workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _calc_series_stats(series: np.ndarray, trend_factor: float) -> Dict[str, float]:
         """Compute mean, linear trend, detrended STD, and significance diagnostics."""
@@ -256,6 +311,11 @@ class SIconcMetrics(SeaIceMetricsBase):
             'significant': bool(reg.pvalue < 0.05),
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `_build_period_stats`.
+    # Purpose: Handle build period stats workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _build_period_stats(
             self,
             SIA_ts: np.ndarray,
@@ -291,6 +351,11 @@ class SIconcMetrics(SeaIceMetricsBase):
             stats_dict[period] = period_metrics
         return stats_dict
 
+    # -----------------------------------------------------------------------------
+    # Function: `SIC_period_stats`.
+    # Purpose: Handle SIC period stats workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SIC_period_stats(self, sic_file: str, sic_key: str, sector: str = 'All') -> Dict[str, Dict[str, Dict[str, float]]]:
         """Compute lightweight period scalar stats for one sector.
 
@@ -340,6 +405,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         ]) / 1e12
         return self._build_period_stats(SIA_ts=SIA_ts, SIE_ts=SIE_ts, MIZ_ts=MIZ_ts, PIA_ts=PIA_ts)
 
+    # -----------------------------------------------------------------------------
+    # Function: `SIC_1M_metrics`.
+    # Purpose: Handle SIC 1M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SIC_1M_metrics(self, sic_file: str, sic_key: str, sector: str = 'All') -> Dict[str, np.ndarray]:
         """
         Calculate some key metrics for a single sea ice concentration dataset, including
@@ -427,7 +497,6 @@ class SIconcMetrics(SeaIceMetricsBase):
 
         # --- Linear trend analysis ---
         months = np.arange(1, nt + 1, 1)
-        years = np.arange(1, nt / 12 + 1, 1)
         if nt / 12 < 15:
             logger.warning("Time series shorter than 15 years — trends may be uncertain.")
 
@@ -469,10 +538,10 @@ class SIconcMetrics(SeaIceMetricsBase):
                 'siconc_clim': siconc_clim,
                 'SIA_clim': SIA_clim, 'SIE_clim': SIE_clim, 'MIZ_clim': MIZ_clim, 'PIA_clim': PIA_clim,
                 'siconc_ano': siconc_ano, 'siconc_ano_std': siconc_ano_std_detrended,
-                'SIA_ano': SIA_ano, 'SIA_ano_std': np.nanstd(SIA_ano),
-                'SIE_ano': SIE_ano, 'SIE_ano_std': np.nanstd(SIE_ano),
-                'MIZ_ano': MIZ_ano, 'MIZ_ano_std': np.nanstd(MIZ_ano),
-                'PIA_ano': PIA_ano, 'PIA_ano_std': np.nanstd(PIA_ano),
+                'SIA_ano': SIA_ano, 'SIA_ano_std': utils.detrended_std_1d(SIA_ano),
+                'SIE_ano': SIE_ano, 'SIE_ano_std': utils.detrended_std_1d(SIE_ano),
+                'MIZ_ano': MIZ_ano, 'MIZ_ano_std': utils.detrended_std_1d(MIZ_ano),
+                'PIA_ano': PIA_ano, 'PIA_ano_std': utils.detrended_std_1d(PIA_ano),
                 'siconc_ano_tr': siconc_ano_tr, 'siconc_ano_tr_p': siconc_ano_tr_p,
                 'SIA_ano_tr': SIA_ano_tr,
                 'SIE_ano_tr': SIE_ano_tr,
@@ -481,6 +550,11 @@ class SIconcMetrics(SeaIceMetricsBase):
                 'siconc_stats': siconc_stats,
                 **key_month_products}
 
+    # -----------------------------------------------------------------------------
+    # Function: `SIC_2M_metrics`.
+    # Purpose: Handle SIC 2M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SIC_2M_metrics(self, sic1_file: str, sic1_key: str, sic2_file: str,
                        sic2_key: str, sector: str = 'All') -> Dict[str, Union[float, np.ndarray]]:
         """

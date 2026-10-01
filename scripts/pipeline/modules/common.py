@@ -7,7 +7,7 @@ from scripts.pipeline import app as _app
 globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 
 import copy
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import yaml
 
@@ -15,6 +15,11 @@ import yaml
 _PLOT_OPTIONS_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
+# -----------------------------------------------------------------------------
+# Function: `_default_plot_options`.
+# Purpose: Handle default plot options workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _default_plot_options() -> Dict[str, Any]:
     """Return built-in plotting defaults for all modules.
 
@@ -58,6 +63,19 @@ def _default_plot_options() -> Dict[str, Any]:
                 # Optional: set to null to keep builtin legend fontsize
                 'legend_fontsize': None,
                 'legend_frameon': True,
+                # Unified line-legend placement (top/bottom)
+                'legend_position': 'top',
+                # Fixed legend columns for all line plots in one run.
+                # Use ``None`` for automatic column inference from figure width
+                # and label lengths.
+                'legend_ncol_fixed': None,
+                # Maximum legend rows when labels are many.
+                # Use ``None`` to enable automatic row-cap heuristics.
+                'legend_max_rows': None,
+                # Extra gap from subplot tight-bbox to top legend
+                'legend_top_gap': 0.012,
+                # Extra reserved top margin for top legends
+                'legend_top_margin_extra': 0.0,
                 # Increase bottom legend spacing from axes (in figure coords)
                 'legend_y_gap_extra': 0.0,
                 # Increase reserved bottom margin for bottom legends
@@ -212,6 +230,11 @@ def _default_plot_options() -> Dict[str, Any]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_deep_update`.
+# Purpose: Handle deep update workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
     """Recursively merge mapping ``updates`` into ``base``."""
     for key, value in updates.items():
@@ -225,6 +248,11 @@ def _deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any
     return base
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_plot_options`.
+# Purpose: Handle load plot options workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_plot_options(case_name: str) -> Dict[str, Any]:
     """Load plotting options with global + case-level overrides."""
     case_key = str(case_name or '').strip() or '__default__'
@@ -254,6 +282,11 @@ def _load_plot_options(case_name: str) -> Dict[str, Any]:
     return options
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_options_get`.
+# Purpose: Handle plot options get workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_options_get(options: Dict[str, Any], path: Sequence[str], default: Any = None) -> Any:
     """Read nested plotting option value by path."""
     cur: Any = options
@@ -264,6 +297,11 @@ def _plot_options_get(options: Dict[str, Any], path: Sequence[str], default: Any
     return cur
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_options_get_module`.
+# Purpose: Handle plot options get module workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_options_get_module(
     options: Dict[str, Any],
     module: str,
@@ -279,6 +317,236 @@ def _plot_options_get_module(
         return glob_val
     return default
 
+
+# -----------------------------------------------------------------------------
+# Function: `_clamp_float`.
+# Purpose: Handle clamp float workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _clamp_float(value: Any, lower: float, upper: float) -> float:
+    """Return ``value`` clamped to ``[lower, upper]`` with float casting."""
+    lo = float(lower)
+    hi = float(upper)
+    if hi < lo:
+        lo, hi = hi, lo
+    try:
+        vv = float(value)
+    except Exception:
+        vv = lo
+    return max(lo, min(hi, vv))
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_main_figsize`.
+# Purpose: Handle heatmap main figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_main_figsize(n_metrics: int, n_models: int, height_scale: float) -> Tuple[float, float]:
+    """Adaptive main heatmap figure size shared across modules."""
+    n_cols = max(1, int(n_metrics))
+    model_count = max(1, int(n_models))
+    n_rows = max(1, 1 + model_count)
+    width = max(8.4, n_cols * 0.98 + 2.3)
+    scale = max(0.70, float(height_scale))
+    compact_boost = 1.16 if model_count <= 2 else (1.08 if model_count <= 4 else 1.0)
+    height = max(4.8, (2.6 + n_rows * 0.76) * scale * compact_boost)
+    return float(width), float(height)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_main_cbar_kwargs`.
+# Purpose: Handle heatmap main cbar kwargs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_main_cbar_kwargs(n_metrics: int, n_models: int) -> Dict[str, float]:
+    """Adaptive horizontal colorbar geometry for main heatmaps."""
+    n_cols = max(1, int(n_metrics))
+    model_count = max(1, int(n_models))
+    n_rows = max(2, 1 + model_count)
+    fraction = 0.029 + 0.004 * min(1.0, 6.0 / float(n_rows))
+    if model_count <= 3:
+        fraction += 0.002
+    if model_count <= 2:
+        pad = 0.140
+    elif model_count <= 4:
+        pad = 0.134
+    elif model_count <= 8:
+        pad = 0.127
+    else:
+        pad = 0.122
+    if n_cols >= 8:
+        pad += 0.018
+    if n_cols >= 10:
+        pad += 0.008
+    aspect = 26.0 + 1.6 * float(n_cols)
+    return {
+        'orientation': 'horizontal',
+        'fraction': _clamp_float(fraction, 0.028, 0.038),
+        'pad': _clamp_float(pad, 0.122, 0.190),
+        'aspect': _clamp_float(aspect, 26.0, 64.0),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_main_adjust`.
+# Purpose: Handle heatmap main adjust workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_main_adjust(*, n_models: int, n_metrics: int = 0) -> Dict[str, float]:
+    """Return consistent subplots-adjust parameters for main heatmaps."""
+    model_count = max(1, int(n_models))
+    metric_count = max(1, int(n_metrics))
+    if model_count <= 2:
+        bottom = 0.246
+    elif model_count <= 4:
+        bottom = 0.238
+    elif model_count <= 8:
+        bottom = 0.228
+    else:
+        bottom = 0.220
+    if metric_count >= 8:
+        bottom += 0.036
+    elif metric_count >= 6:
+        bottom += 0.024
+    return {
+        'left': 0.06,
+        'right': 0.99,
+        'top': 0.95,
+        'bottom': _clamp_float(bottom, 0.220, 0.320),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_figsize`.
+# Purpose: Handle heatmap seasonal figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_figsize(n_metrics: int, n_models: int, height_scale: float) -> Tuple[float, float]:
+    """Adaptive 2×2 seasonal heatmap figure size shared across modules."""
+    n_cols = max(1, int(n_metrics))
+    model_count = max(1, int(n_models))
+    n_rows = max(1, 1 + model_count)
+    panel_w = max(8.2, n_cols * 0.90 + 0.8)
+    panel_h = max(4.0, 1.90 + n_rows * 0.62)
+    scale = max(0.82, float(height_scale))
+    compact_boost = (
+        1.22 if model_count <= 2 else
+        1.14 if model_count <= 4 else
+        1.06 if model_count <= 6 else
+        1.0
+    )
+    label_room = 1.20 + 0.16 * max(0, n_cols - 6)
+    fig_w = panel_w * 2.0 + 1.2
+    fig_h = max(8.8, (panel_h * 2.0 + label_room) * scale * compact_boost)
+    return float(fig_w), float(fig_h)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_spacing`.
+# Purpose: Handle heatmap seasonal spacing workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_spacing(wspace: float, hspace: float, *, n_models: int = -1) -> Tuple[float, float]:
+    """Clamp seasonal subplot spacing to avoid overlap and excessive gaps."""
+    model_count = max(1, int(n_models)) if int(n_models) > 0 else 4
+    if model_count <= 3:
+        ws_floor = 0.24
+    elif model_count <= 6:
+        ws_floor = 0.22
+    else:
+        ws_floor = 0.20
+    if model_count <= 2:
+        hs_floor = 0.36
+    elif model_count <= 4:
+        hs_floor = 0.33
+    elif model_count <= 8:
+        hs_floor = 0.30
+    else:
+        hs_floor = 0.28
+    return _clamp_float(wspace, ws_floor, 0.48), _clamp_float(hspace, hs_floor, 0.50)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_cbar_kwargs`.
+# Purpose: Handle heatmap seasonal cbar kwargs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_cbar_kwargs(
+    *,
+    n_metrics: int,
+    n_models: int,
+    fraction: float,
+    pad: float,
+    aspect: float,
+) -> Dict[str, float]:
+    """Adaptive bottom colorbar geometry for seasonal heatmaps."""
+    n_cols = max(1, int(n_metrics))
+    model_count = max(1, int(n_models))
+    n_rows = max(2, 1 + model_count)
+    auto_fraction = 0.022 + 0.004 * min(1.0, 6.0 / float(n_rows))
+    if model_count <= 3:
+        auto_fraction += 0.002
+    if model_count <= 2:
+        auto_pad = 0.165
+    elif model_count <= 4:
+        auto_pad = 0.156
+    elif model_count <= 6:
+        auto_pad = 0.142
+    elif model_count <= 10:
+        auto_pad = 0.128
+    else:
+        auto_pad = 0.118
+    auto_aspect = max(30.0, 34.0 + 3.8 * float(n_cols))
+    return {
+        'fraction': _clamp_float(0.45 * float(fraction) + 0.55 * auto_fraction, 0.019, 0.036),
+        'pad': _clamp_float(0.35 * float(pad) + 0.65 * auto_pad, 0.112, 0.185),
+        'aspect': _clamp_float(0.55 * float(aspect) + 0.45 * auto_aspect, 20.0, 84.0),
+    }
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_adjust`.
+# Purpose: Handle heatmap seasonal adjust workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_adjust(
+    *,
+    n_models: int,
+    n_metrics: int = 0,
+    wspace: float,
+    hspace: float,
+    right_margin: float,
+) -> Dict[str, float]:
+    """Return consistent subplots-adjust parameters for 2×2 seasonal heatmaps."""
+    model_count = max(1, int(n_models))
+    metric_count = max(1, int(n_metrics))
+    ws, hs = _heatmap_seasonal_spacing(wspace, hspace, n_models=model_count)
+    if model_count <= 2:
+        base_bottom = 0.245
+    elif model_count <= 4:
+        base_bottom = 0.230
+    elif model_count <= 6:
+        base_bottom = 0.215
+    elif model_count <= 10:
+        base_bottom = 0.198
+    else:
+        base_bottom = 0.182
+    if metric_count >= 8:
+        base_bottom += 0.028
+    return {
+        'left': 0.06,
+        'right': _clamp_float(float(right_margin) + 0.06, 0.90, 0.98),
+        'top': 0.94,
+        'bottom': _clamp_float(base_bottom, 0.17, 0.27),
+        'wspace': ws,
+        'hspace': hs,
+    }
+
+# -----------------------------------------------------------------------------
+# Function: `_apply_plot_runtime_options`.
+# Purpose: Handle apply plot runtime options workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _apply_plot_runtime_options(options: Dict[str, Any], module: str) -> None:
     """Apply runtime plotting knobs (line + spatial) to plot backend."""
     try:
@@ -332,6 +600,11 @@ def _apply_plot_runtime_options(options: Dict[str, Any], module: str) -> None:
         line_month_rot = _plot_options_get_module(options, module, ['line', 'month_tick_rotation'], None)
         line_legend_fs = _plot_options_get_module(options, module, ['line', 'legend_fontsize'], None)
         line_legend_frame = _plot_options_get_module(options, module, ['line', 'legend_frameon'], None)
+        line_legend_position = _plot_options_get_module(options, module, ['line', 'legend_position'], None)
+        line_legend_ncol_fixed = _plot_options_get_module(options, module, ['line', 'legend_ncol_fixed'], None)
+        line_legend_max_rows = _plot_options_get_module(options, module, ['line', 'legend_max_rows'], None)
+        line_legend_top_gap = _plot_options_get_module(options, module, ['line', 'legend_top_gap'], None)
+        line_legend_top_margin_extra = _plot_options_get_module(options, module, ['line', 'legend_top_margin_extra'], None)
         line_legend_gap_extra = _plot_options_get_module(options, module, ['line', 'legend_y_gap_extra'], None)
         line_legend_margin_extra = _plot_options_get_module(options, module, ['line', 'legend_bottom_margin_extra'], None)
         line_sym_pad = _plot_options_get_module(options, module, ['line', 'symmetric_ylim_pad_ratio'], None)
@@ -439,6 +712,16 @@ def _apply_plot_runtime_options(options: Dict[str, Any], module: str) -> None:
             kw['line_legend_fontsize'] = float(line_legend_fs)
         if line_legend_frame is not None:
             kw['line_legend_frameon'] = bool(line_legend_frame)
+        if line_legend_position is not None:
+            kw['line_legend_position'] = str(line_legend_position)
+        if line_legend_ncol_fixed is not None:
+            kw['line_legend_ncol_fixed'] = int(line_legend_ncol_fixed)
+        if line_legend_max_rows is not None:
+            kw['line_legend_max_rows'] = int(line_legend_max_rows)
+        if line_legend_top_gap is not None:
+            kw['line_legend_top_gap'] = float(line_legend_top_gap)
+        if line_legend_top_margin_extra is not None:
+            kw['line_legend_top_margin_extra'] = float(line_legend_top_margin_extra)
         if line_legend_gap_extra is not None:
             kw['line_legend_y_gap_extra'] = float(line_legend_gap_extra)
         if line_legend_margin_extra is not None:
@@ -476,6 +759,11 @@ def _apply_plot_runtime_options(options: Dict[str, Any], module: str) -> None:
             exc,
         )
 
+# -----------------------------------------------------------------------------
+# Function: `_check_outputs_exist`.
+# Purpose: Handle check outputs exist workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _check_outputs_exist(module: str, fig_dir: Path, hemisphere: str,
                          recalculate: bool = False) -> bool:
     """Always re-render module outputs so plotting stays decoupled from metric calculation."""
@@ -486,10 +774,42 @@ def _check_outputs_exist(module: str, fig_dir: Path, hemisphere: str,
     )
     return False
 
+
+# -----------------------------------------------------------------------------
+# Function: `_reuse_processed_inputs_for_recalculate`.
+# Purpose: Handle reuse processed inputs for recalculate workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _reuse_processed_inputs_for_recalculate(case_name: str, recalculate: bool) -> bool:
+    """Return whether `--recalculate` should reuse existing Processed files.
+
+    Control via env var:
+      - `SITOOL_RECALCULATE_REUSE_PROCESSED=1/true/yes/on` -> force reuse
+      - `SITOOL_RECALCULATE_REUSE_PROCESSED=0/false/no/off` -> force rebuild
+      - unset/other -> default False (keep legacy behavior)
+    """
+    if not bool(recalculate):
+        return False
+
+    raw = str(os.environ.get('SITOOL_RECALCULATE_REUSE_PROCESSED', '')).strip().lower()
+    if raw in {'1', 'true', 'yes', 'on'}:
+        return True
+    if raw in {'0', 'false', 'no', 'off'}:
+        return False
+    return False
+
 __all__ = [
     "_check_outputs_exist",
+    "_reuse_processed_inputs_for_recalculate",
     "_load_plot_options",
     "_plot_options_get",
     "_plot_options_get_module",
+    "_heatmap_main_figsize",
+    "_heatmap_main_cbar_kwargs",
+    "_heatmap_main_adjust",
+    "_heatmap_seasonal_figsize",
+    "_heatmap_seasonal_spacing",
+    "_heatmap_seasonal_cbar_kwargs",
+    "_heatmap_seasonal_adjust",
     "_apply_plot_runtime_options",
 ]

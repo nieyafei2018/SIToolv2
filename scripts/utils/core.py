@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 
 cdo = Cdo(options=[f'-f nc4 -z {SITOOL_CDO_COMPRESSION}'])
 
+# -----------------------------------------------------------------------------
+# Function: `_compressed_encoding`.
+# Purpose: Handle compressed encoding workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _compressed_encoding(ds: xr.Dataset, base: Dict[str, Dict[str, object]] = None) -> Dict[str, Dict[str, object]]:
     """Build one NetCDF encoding map with lightweight compression for numeric data vars."""
     encoding: Dict[str, Dict[str, object]] = {}
@@ -53,6 +58,11 @@ def _compressed_encoding(ds: xr.Dataset, base: Dict[str, Dict[str, object]] = No
         encoding[var_name] = var_enc
     return encoding
 
+# -----------------------------------------------------------------------------
+# Function: `write_netcdf_compressed`.
+# Purpose: Handle write netcdf compressed workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def write_netcdf_compressed(ds: xr.Dataset, output_file: str, **kwargs) -> None:
     """Write one NetCDF file with default compression settings for numeric data vars."""
     params = dict(kwargs)

@@ -9,11 +9,23 @@ globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 from scripts.pipeline.modules.common import (
     _apply_plot_runtime_options,
     _check_outputs_exist,
+    _heatmap_main_adjust as _common_heatmap_main_adjust,
+    _heatmap_main_cbar_kwargs,
+    _heatmap_main_figsize as _common_heatmap_main_figsize,
+    _heatmap_seasonal_adjust,
+    _heatmap_seasonal_cbar_kwargs,
+    _heatmap_seasonal_figsize as _common_heatmap_seasonal_figsize,
+    _heatmap_seasonal_spacing as _common_heatmap_seasonal_spacing,
     _load_plot_options,
     _plot_options_get_module,
 )
 from scripts.config import DAYS_PER_MONTH
 
+# -----------------------------------------------------------------------------
+# Function: `_compute_thickness_obs_model_metrics`.
+# Purpose: Handle compute thickness obs model metrics workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _compute_thickness_obs_model_metrics(
     thick_metrics, data_dir: str, obs_files: List[str], model_files: List[str],
     model_labels: list, obs_key: str, model_key: str, module_name: str,
@@ -75,6 +87,11 @@ def _compute_thickness_obs_model_metrics(
             safe_stage_dir = stage_dir or (Path(data_dir) / '_staging' / module_name)
             safe_stage_dir.mkdir(parents=True, exist_ok=True)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_worker`.
+            # Purpose: Handle worker workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _worker(task: Tuple[int, str, str]) -> Dict[str, Any]:
                 idx, mf, mlab = task
                 diff_payload = None
@@ -165,6 +182,11 @@ def _compute_thickness_obs_model_metrics(
         matched_model_labels_used,
     )
 
+# -----------------------------------------------------------------------------
+# Function: `_build_thickness_label_sets`.
+# Purpose: Handle build thickness label sets workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_thickness_label_sets(obs_1m, obs2_1m, obs2_diff, diff_dicts, model_labels_used,
                                 obs_labels: Optional[List[str]] = None):
     """Build label/dict lists for thickness-family figure generation."""
@@ -188,10 +210,20 @@ def _build_thickness_label_sets(obs_1m, obs2_1m, obs2_diff, diff_dicts, model_la
     return obs_pair, all_diff_dicts_map, all_labels_map, all_diff_dicts, all_labels, model_dicts
 
 
+# -----------------------------------------------------------------------------
+# Function: `_fmt_thickness_month_stat`.
+# Purpose: Handle fmt thickness month stat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _fmt_thickness_month_stat(value: float) -> str:
     return _format_min_sig(value, min_sig=3)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_month_candidates`.
+# Purpose: Handle thickness month candidates workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_month_candidates(month: int) -> List[Tuple[str, str, int]]:
     """Return candidate (month_tag, month_label, month_number) tuples for one display month."""
     month = int(month)
@@ -210,6 +242,11 @@ def _thickness_month_candidates(month: int) -> List[Tuple[str, str, int]]:
     return candidates
 
 
+# -----------------------------------------------------------------------------
+# Function: `_season_months`.
+# Purpose: Handle season months workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     """Return canonical season -> month mapping for one hemisphere."""
     h = str(hemisphere or '').lower()
@@ -228,6 +265,11 @@ def _season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_domain_specs`.
+# Purpose: Handle thickness domain specs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_domain_specs(hemisphere: str) -> List[Tuple[str, Tuple[str, Optional[Union[int, str]]]]]:
     """Return ordered domain specs for scalar table tabs."""
     specs: List[Tuple[str, Tuple[str, Optional[Union[int, str]]]]] = [('Annual', ('annual', None))]
@@ -240,6 +282,11 @@ def _thickness_domain_specs(hemisphere: str) -> List[Tuple[str, Tuple[str, Optio
     return specs
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_yearmon_series`.
+# Purpose: Handle thickness yearmon series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_yearmon_series(metric_dict: Dict[str, Any], n_time: int) -> List[Tuple[int, int]]:
     """Infer (year, month) per timestep for one metric payload."""
     if n_time <= 0:
@@ -278,6 +325,11 @@ def _thickness_yearmon_series(metric_dict: Dict[str, Any], n_time: int) -> List[
     return [(int(years[ii]), int(mons[ii])) for ii in range(n_time)]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_seasonal_diagnostics`.
+# Purpose: Handle thickness seasonal diagnostics workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_seasonal_diagnostics(
     metric_dict: Optional[dict], season: str, hemisphere: str
 ) -> Dict[str, Any]:
@@ -381,6 +433,11 @@ def _thickness_seasonal_diagnostics(
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_extract_month_skill`.
+# Purpose: Handle thickness extract month skill workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_extract_month_skill(diff_dict: Optional[dict], month: Optional[int]) -> Tuple[float, float]:
     """Return (Corr, RMSE) from one Thickness/SNdepth 2M payload for one month/annual."""
     if not isinstance(diff_dict, dict):
@@ -442,6 +499,11 @@ def _thickness_extract_month_skill(diff_dict: Optional[dict], month: Optional[in
     return float(corr) if np.isfinite(corr) else np.nan, float(rmse) if np.isfinite(rmse) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_extract_month_extended_stats`.
+# Purpose: Handle thickness extract month extended stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_extract_month_extended_stats(
     diff_dict: Optional[dict], month: Optional[int]
 ) -> Tuple[float, float, float, float, float, float, float, float]:
@@ -469,6 +531,11 @@ def _thickness_extract_month_extended_stats(
 
     candidates = _thickness_month_candidates(int(month))
 
+    # -----------------------------------------------------------------------------
+    # Function: `_pick_key`.
+    # Purpose: Handle pick key workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _pick_key(prefix: str) -> float:
         for mtag, _mlabel, _mnum in candidates:
             vv = diff_dict.get(f'{prefix}_{mtag}', np.nan)
@@ -535,7 +602,10 @@ def _thickness_extract_month_extended_stats(
                 y2v = y2[valid]
                 if not np.isfinite(vol_mean_diff):
                     vol_mean_diff = abs(float(np.nanmean(y1v)) - float(np.nanmean(y2v)))
-                vol_std_diff = abs(float(np.nanstd(y1v)) - float(np.nanstd(y2v)))
+                _sd1 = utils.detrended_std_1d(y1v)
+                _sd2 = utils.detrended_std_1d(y2v)
+                if np.isfinite(_sd1) and np.isfinite(_sd2):
+                    vol_std_diff = abs(float(_sd1) - float(_sd2))
                 if y1v.size >= 2 and y2v.size >= 2:
                     x = np.arange(y1v.size, dtype=float)
                     try:
@@ -564,6 +634,11 @@ def _thickness_extract_month_extended_stats(
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_extract_month_absolute_stats`.
+# Purpose: Handle thickness extract month absolute stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_extract_month_absolute_stats(
     metric_dict: Optional[dict], month: Optional[int]
 ) -> Tuple[float, float, float, float, float, float]:
@@ -640,7 +715,7 @@ def _thickness_extract_month_absolute_stats(
             valid = np.isfinite(vol_ano)
             if int(np.sum(valid)) > 0:
                 vv = vol_ano[valid]
-                vol_std = float(np.nanstd(vv))
+                vol_std = utils.detrended_std_1d(vv)
                 if vv.size >= 2:
                     x = np.arange(vv.size, dtype=float)
                     try:
@@ -661,7 +736,7 @@ def _thickness_extract_month_absolute_stats(
                 valid = np.isfinite(vol_ano_mon)
                 if int(np.sum(valid)) > 0:
                     vv = vol_ano_mon[valid]
-                    vol_std = float(np.nanstd(vv))
+                    vol_std = utils.detrended_std_1d(vv)
                     if vv.size >= 2:
                         x = np.arange(vv.size, dtype=float)
                         try:
@@ -680,6 +755,11 @@ def _thickness_extract_month_absolute_stats(
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_extract_domain_absolute_stats`.
+# Purpose: Handle thickness extract domain absolute stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_extract_domain_absolute_stats(
     metric_dict: Optional[dict],
     domain: Tuple[str, Optional[Union[int, str]]],
@@ -707,7 +787,7 @@ def _thickness_extract_domain_absolute_stats(
         thick_std = float(np.nanmean(std_map)) if std_map.ndim == 2 and np.any(np.isfinite(std_map)) else np.nan
         thick_trend = float(np.nanmean(tr_map)) if tr_map.ndim == 2 and np.any(np.isfinite(tr_map)) else np.nan
         vol_mean = float(sdiag.get('vol_clim', np.nan))
-        vol_std = float(np.nanstd(vol_ano)) if vol_ano.size > 0 and np.any(np.isfinite(vol_ano)) else np.nan
+        vol_std = utils.detrended_std_1d(vol_ano)
         vol_trend = np.nan
         if vol_ano.size >= 2:
             valid = np.isfinite(vol_ano)
@@ -729,6 +809,11 @@ def _thickness_extract_domain_absolute_stats(
     return _thickness_extract_month_absolute_stats(metric_dict, None)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_thickness_extract_domain_extended_stats`.
+# Purpose: Handle thickness extract domain extended stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _thickness_extract_domain_extended_stats(
     diff_dict: Optional[dict],
     domain: Tuple[str, Optional[Union[int, str]]],
@@ -782,7 +867,10 @@ def _thickness_extract_domain_extended_stats(
                 if np.nanstd(y1v) > 0 and np.nanstd(y2v) > 0:
                     corr = float(np.corrcoef(y1v, y2v)[0, 1])
                 rmse = float(np.sqrt(np.nanmean((y1v - y2v) ** 2)))
-                vol_std_diff = abs(float(np.nanstd(y1v)) - float(np.nanstd(y2v)))
+                _sd1 = utils.detrended_std_1d(y1v)
+                _sd2 = utils.detrended_std_1d(y2v)
+                if np.isfinite(_sd1) and np.isfinite(_sd2):
+                    vol_std_diff = abs(float(_sd1) - float(_sd2))
                 xx = np.arange(y1v.size, dtype=float)
                 try:
                     slope1 = float(np.polyfit(xx, y1v, 1)[0])
@@ -803,6 +891,11 @@ def _thickness_extract_domain_extended_stats(
     return _thickness_extract_month_extended_stats(diff_dict, None)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_thickness_month_period_raw_table`.
+# Purpose: Handle build thickness month period raw table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_thickness_month_period_raw_table(
     obs1_metric: Optional[dict],
     obs2_metric: Optional[dict],
@@ -814,15 +907,59 @@ def _build_thickness_month_period_raw_table(
     obs2_label: str = 'obs2',
 ) -> Dict[str, Any]:
     """Build annual/season/month raw (absolute) table for SIthick/SNdepth."""
-    headers = [
-        'Model/Obs Name',
-        'Mean',
-        'Std',
-        'Trend',
-        'Vol Mean',
-        'Vol Std',
-        'Vol Trend',
+    metric_meta: List[Dict[str, str]] = [
+        _metric_meta(
+            'state.mean.mapmean.raw',
+            'Mean[MapMean] Raw',
+            long_label='Spatial mean of climatological map (raw value)',
+            scope='MapMean',
+            stat='Mean',
+            op='Raw',
+        ),
+        _metric_meta(
+            'state.dstd.mapmean.raw',
+            'DStd[MapMean] Raw',
+            long_label='Spatial mean of detrended-std map (raw value)',
+            scope='MapMean',
+            stat='DStd',
+            op='Raw',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'state.trend.mapmean.raw',
+            'Trend[MapMean] Raw',
+            long_label='Spatial mean of trend map (raw value)',
+            scope='MapMean',
+            stat='Trend',
+            op='Raw',
+        ),
+        _metric_meta(
+            'state.mean.volts.raw',
+            'Mean[VolTS] Raw',
+            long_label='Mean of volume time series (raw value)',
+            scope='VolTS',
+            stat='Mean',
+            op='Raw',
+        ),
+        _metric_meta(
+            'state.dstd.volts.raw',
+            'DStd[VolTS] Raw',
+            long_label='Detrended std of volume time series (raw value)',
+            scope='VolTS',
+            stat='DStd',
+            op='Raw',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'state.trend.volts.raw',
+            'Trend[VolTS] Raw',
+            long_label='Trend of volume time series (raw value)',
+            scope='VolTS',
+            stat='Trend',
+            op='Raw',
+        ),
     ]
+    headers = ['Model/Obs Name'] + [m['short_label'] for m in metric_meta]
     units = ['', 'm', 'm', 'm/decade', rmse_unit, rmse_unit, f'{rmse_unit}/decade']
     specs = _thickness_domain_specs(hemisphere)
     season_order = [name for name, _ in specs]
@@ -872,10 +1009,16 @@ def _build_thickness_month_period_raw_table(
         'headers': headers,
         'rows': [],
         'units': units,
+        'metric_meta': metric_meta,
         'seasons': seasons,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_thickness_month_period_table`.
+# Purpose: Handle build thickness month period table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_thickness_month_period_table(obs2_diff: Optional[dict],
                                         diff_dicts: List[dict],
                                         model_labels: List[str],
@@ -884,17 +1027,75 @@ def _build_thickness_month_period_table(obs2_diff: Optional[dict],
                                         obs1_label: str = 'obs1 (baseline)',
                                         obs2_label: str = 'obs2') -> Dict[str, Any]:
     """Build annual/season/month period tabs for SIthick/SNdepth scalar table."""
-    headers = [
-        'Model/Obs Name',
-        'Mean Diff',
-        'Std Diff',
-        'Trend Diff',
-        'Vol Mean Diff',
-        'Vol Std Diff',
-        'Vol Trend Diff',
-        'Corr',
-        'RMSE',
+    metric_meta: List[Dict[str, str]] = [
+        _metric_meta(
+            'state.mean.map.mae',
+            'Mean MAE[Map]',
+            long_label='MAE between climatological maps',
+            scope='Map',
+            stat='Mean',
+            op='MAE',
+        ),
+        _metric_meta(
+            'state.dstd.map.mae',
+            'DStd MAE[Map]',
+            long_label='MAE between detrended-std maps',
+            scope='Map',
+            stat='DStd',
+            op='MAE',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'state.trend.map.mae',
+            'Trend MAE[Map]',
+            long_label='MAE between trend maps',
+            scope='Map',
+            stat='Trend',
+            op='MAE',
+        ),
+        _metric_meta(
+            'state.mean.volts.absdiff',
+            'Mean AbsDiff[VolTS]',
+            long_label='Absolute difference of volume-series mean',
+            scope='VolTS',
+            stat='Mean',
+            op='AbsDiff',
+        ),
+        _metric_meta(
+            'state.dstd.volts.absdiff',
+            'DStd AbsDiff[VolTS]',
+            long_label='Absolute difference of volume-series detrended std',
+            scope='VolTS',
+            stat='DStd',
+            op='AbsDiff',
+            std_type='detrended',
+        ),
+        _metric_meta(
+            'state.trend.volts.absdiff',
+            'Trend AbsDiff[VolTS]',
+            long_label='Absolute difference of volume-series trend',
+            scope='VolTS',
+            stat='Trend',
+            op='AbsDiff',
+        ),
+        _metric_meta(
+            'state.corr.volts.skill',
+            'Corr[VolTS]',
+            long_label='Correlation skill on volume time series',
+            scope='VolTS',
+            stat='Corr',
+            op='Skill',
+        ),
+        _metric_meta(
+            'state.rmse.volts.skill',
+            'RMSE[VolTS]',
+            long_label='RMSE skill on volume time series',
+            scope='VolTS',
+            stat='RMSE',
+            op='Skill',
+        ),
     ]
+    headers = ['Model/Obs Name'] + [m['short_label'] for m in metric_meta]
     units = ['', 'm', 'm', 'm/decade', rmse_unit, rmse_unit, f'{rmse_unit}/decade', '', rmse_unit]
     specs = _thickness_domain_specs(hemisphere)
     season_order = [name for name, _ in specs]
@@ -912,22 +1113,20 @@ def _build_thickness_month_period_table(obs2_diff: Optional[dict],
             _fmt_thickness_month_stat(0.0),
             _fmt_thickness_month_stat(0.0),
         ]]
-        obs2_vals: Optional[List[float]] = None
         if isinstance(obs2_diff, dict):
             md0, sd0, td0, vmd0, vsd0, vtd0, c0, r0 = _thickness_extract_domain_extended_stats(
                 obs2_diff, domain, hemisphere
             )
-            obs2_vals = [md0, sd0, td0, vmd0, vsd0, vtd0, c0, r0]
             rows.append([
                 str(obs2_label),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(md0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(sd0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(td0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(vmd0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(vsd0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(vtd0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(c0)),
-                _fmt_thickness_month_stat(_obs2_identity_ratio(r0)),
+                _fmt_thickness_month_stat(md0),
+                _fmt_thickness_month_stat(sd0),
+                _fmt_thickness_month_stat(td0),
+                _fmt_thickness_month_stat(vmd0),
+                _fmt_thickness_month_stat(vsd0),
+                _fmt_thickness_month_stat(vtd0),
+                _fmt_thickness_month_stat(c0),
+                _fmt_thickness_month_stat(r0),
             ])
 
         for ii, dct in enumerate(diff_dicts):
@@ -935,19 +1134,16 @@ def _build_thickness_month_period_table(obs2_diff: Optional[dict],
             md, sd, td, vmd, vsd, vtd, cc, rr = _thickness_extract_domain_extended_stats(
                 dct, domain, hemisphere
             )
-            vals = [md, sd, td, vmd, vsd, vtd, cc, rr]
-            if obs2_vals is not None:
-                vals = [_calc_obs2_ratio(v, b) for v, b in zip(vals, obs2_vals)]
             rows.append([
                 label,
-                _fmt_thickness_month_stat(vals[0]),
-                _fmt_thickness_month_stat(vals[1]),
-                _fmt_thickness_month_stat(vals[2]),
-                _fmt_thickness_month_stat(vals[3]),
-                _fmt_thickness_month_stat(vals[4]),
-                _fmt_thickness_month_stat(vals[5]),
-                _fmt_thickness_month_stat(vals[6]),
-                _fmt_thickness_month_stat(vals[7]),
+                _fmt_thickness_month_stat(md),
+                _fmt_thickness_month_stat(sd),
+                _fmt_thickness_month_stat(td),
+                _fmt_thickness_month_stat(vmd),
+                _fmt_thickness_month_stat(vsd),
+                _fmt_thickness_month_stat(vtd),
+                _fmt_thickness_month_stat(cc),
+                _fmt_thickness_month_stat(rr),
             ])
         seasons[season_name] = rows
 
@@ -957,10 +1153,16 @@ def _build_thickness_month_period_table(obs2_diff: Optional[dict],
         'headers': headers,
         'rows': [],
         'units': units,
+        'metric_meta': metric_meta,
         'seasons': seasons,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_adaptive_sit_map_ranges`.
+# Purpose: Handle adaptive sit map ranges workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _adaptive_sit_map_ranges(
     diff_payloads: List[dict],
     month: int,
@@ -1021,6 +1223,64 @@ def _adaptive_sit_map_ranges(
     return [0.0, float(raw_max)], [-float(diff_max), float(diff_max)]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_main_figsize`.
+# Purpose: Handle heatmap main figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_main_figsize(n_metrics: int, n_models: int, height_scale: float) -> Tuple[float, float]:
+    """Adaptive main heatmap figure size (delegates to shared module logic)."""
+    return _common_heatmap_main_figsize(n_metrics, n_models, height_scale)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_figsize`.
+# Purpose: Handle heatmap seasonal figsize workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_figsize(n_metrics: int, n_models: int, height_scale: float) -> Tuple[float, float]:
+    """Adaptive 2×2 seasonal heatmap figure size (shared logic)."""
+    return _common_heatmap_seasonal_figsize(n_metrics, n_models, height_scale)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_seasonal_spacing`.
+# Purpose: Handle heatmap seasonal spacing workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_seasonal_spacing(wspace: float, hspace: float) -> Tuple[float, float]:
+    """Clamp seasonal subplot spacing (shared logic)."""
+    return _common_heatmap_seasonal_spacing(wspace, hspace)
+
+
+# -----------------------------------------------------------------------------
+# Function: `_heatmap_bottom_cbar_kwargs`.
+# Purpose: Handle heatmap bottom cbar kwargs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _heatmap_bottom_cbar_kwargs(
+    *,
+    n_metrics: int,
+    n_models: int,
+    fraction: float,
+    pad: float,
+    aspect: float,
+) -> Dict[str, float]:
+    """Adaptive bottom colorbar geometry for seasonal heatmaps."""
+    return _heatmap_seasonal_cbar_kwargs(
+        n_metrics=n_metrics,
+        n_models=n_models,
+        fraction=fraction,
+        pad=pad,
+        aspect=aspect,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Function: `eval_sithick`.
+# Purpose: Handle eval sithick workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                  data_dir: str, output_dir: str,
                  recalculate: bool = False,
@@ -1294,18 +1554,20 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         model_labels=list(model_labels_used),
     )
     group_labels: List[str] = []
+    group_labels_for_ts: List[str] = []
     group_model_metric_means_for_ts: List[Any] = []
     group_model_metric_stds_for_ts: List[Any] = []
     group_diff_means_for_ts: List[Any] = []
-    group_diff_stds_for_ts: List[Any] = []
+    _group_diff_stds_for_ts: List[Any] = []
     if group_specs and base_model_metric_payloads_for_ts:
         group_model_metric_means_for_ts, group_model_metric_stds_for_ts, _g_labels = _build_group_mean_std_payloads(
             model_payloads=base_model_metric_payloads_for_ts,
             model_labels=list(base_model_labels_for_ts),
             group_specs=group_specs,
         )
+        group_labels_for_ts = list(_g_labels)
     if group_specs and base_diff_dicts_for_ts:
-        group_diff_means_for_ts, group_diff_stds_for_ts, _gd_labels = _build_group_mean_std_payloads(
+        group_diff_means_for_ts, _group_diff_stds_for_ts, _gd_labels = _build_group_mean_std_payloads(
             model_payloads=base_diff_dicts_for_ts,
             model_labels=list(base_model_labels_for_ts),
             group_specs=group_specs,
@@ -1336,18 +1598,20 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         model_labels=list(base_matched_labels_for_ts),
     )
     matched_group_labels: List[str] = []
+    matched_group_labels_for_ts: List[str] = []
     matched_group_model_metric_means_for_ts: List[Any] = []
     matched_group_model_metric_stds_for_ts: List[Any] = []
     matched_group_diff_means_for_ts: List[Any] = []
-    matched_group_diff_stds_for_ts: List[Any] = []
+    _matched_group_diff_stds_for_ts: List[Any] = []
     if matched_group_specs and base_matched_model_metric_payloads_for_ts:
         matched_group_model_metric_means_for_ts, matched_group_model_metric_stds_for_ts, _mg_labels = _build_group_mean_std_payloads(
             model_payloads=base_matched_model_metric_payloads_for_ts,
             model_labels=list(base_matched_labels_for_ts),
             group_specs=matched_group_specs,
         )
+        matched_group_labels_for_ts = list(_mg_labels)
     if matched_group_specs and base_matched_diff_dicts_for_ts:
-        matched_group_diff_means_for_ts, matched_group_diff_stds_for_ts, _mgd_labels = _build_group_mean_std_payloads(
+        matched_group_diff_means_for_ts, _matched_group_diff_stds_for_ts, _mgd_labels = _build_group_mean_std_payloads(
             model_payloads=base_matched_diff_dicts_for_ts,
             model_labels=list(base_matched_labels_for_ts),
             group_specs=matched_group_specs,
@@ -1375,31 +1639,33 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         logger.info('Generating figures ...')
         fig_dir = Path(output_dir) / module
         fig_dir.mkdir(parents=True, exist_ok=True)
+        # Remove legacy PNGs from previous naming schemes to avoid mixed HTML listing.
+        for _stale_png in fig_dir.glob('*.png'):
+            try:
+                _stale_png.unlink()
+            except Exception:
+                continue
         key_months = SIM.SeaIceMetricsBase.resolve_key_months(hemisphere)
 
         obs_pair_base, all_diff_dicts_map_base, all_labels_map_base, all_diff_dicts_base, all_labels_base, model_dicts_base = \
             _build_thickness_label_sets(
                 obs_1m, obs2_1m, obs2_diff, base_diff_dicts_for_ts, base_model_labels_for_ts, obs_labels=obs_labels
             )
-        obs_pair, all_diff_dicts_map, all_labels_map, all_diff_dicts, all_labels, model_dicts = \
+        _, all_diff_dicts_map, all_labels_map, _, _, _ = \
             _build_thickness_label_sets(
                 obs_1m, obs2_1m, obs2_diff, diff_dicts, model_labels_used, obs_labels=obs_labels
-            )
-        obs_pair_base, all_diff_dicts_map_base, all_labels_map_base, all_diff_dicts_base, all_labels_base, model_dicts_base = \
-            _build_thickness_label_sets(
-                obs_1m, obs2_1m, obs2_diff, base_diff_dicts_for_ts, base_model_labels_for_ts, obs_labels=obs_labels
             )
 
         with xr.open_dataset(grid_file) as ds:
             _lon, _lat = np.array(ds['lon']), np.array(ds['lat'])
 
         pf.plot_sit_ts(
-            model_dicts_base, all_diff_dicts_map_base, all_labels_map_base, str(fig_dir / 'SIT_ts.png'),
+            model_dicts_base, all_diff_dicts_map_base, all_labels_map_base, str(fig_dir / 'sithick_thickvol_ts_raw.png'),
             line_style=line_styles, color=line_colors,
         )
         pf.plot_sit_ano(
             model_dicts_base, all_diff_dicts_base, all_labels_base, module_vars['year_range'],
-            hms=hemisphere, fig_name=str(fig_dir / 'SIT_ano.png'),
+            hms=hemisphere, fig_name=str(fig_dir / 'sithick_thickvol_ano_ts_raw.png'),
             line_style=line_styles, color=line_colors,
         )
 
@@ -1409,18 +1675,21 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
             mtag = SIM.SeaIceMetricsBase.month_tag(month)
             pf.plot_sit_key_month_ano(
                 _sit_metric_all, _sit_labels_all, module_vars['year_range'], month,
-                hms=hemisphere, fig_name=str(fig_dir / f'sithick_ano_timeseries_{mtag}.png'),
+                hms=hemisphere, fig_name=str(fig_dir / f'sithick_thickvol_ano_ts_{mtag}_raw.png'),
                 line_style=line_styles, color=line_colors,
+                obs_count=(2 if obs2_1m is not None else 1),
             )
-            if group_labels and group_model_metric_means_for_ts:
+            if group_labels_for_ts and group_model_metric_means_for_ts:
                 pf.plot_sit_key_month_ano(
                     [obs_1m] + ([obs2_1m] if obs2_1m is not None else []) + group_model_metric_means_for_ts,
-                    [obs1_plot_label] + ([obs2_plot_label] if obs2_1m is not None else []) + group_labels,
+                    [obs1_plot_label] + ([obs2_plot_label] if obs2_1m is not None else []) + group_labels_for_ts,
                     module_vars['year_range'], month,
                     hms=hemisphere,
-                    fig_name=str(fig_dir / f'sithick_ano_timeseries_{mtag}_groupmean.png'),
+                    fig_name=str(fig_dir / f'sithick_thickvol_ano_ts_{mtag}_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=group_model_metric_stds_for_ts,
+                    obs_count=(2 if obs2_1m is not None else 1),
+                    group_only_mode=True,
                 )
 
         if group_labels and group_model_metric_means_for_ts and group_diff_means_for_ts:
@@ -1428,7 +1697,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 group_model_metric_means_for_ts,
                 ([obs_pair_base] if obs_pair_base else []) + group_diff_means_for_ts,
                 [obs1_plot_label, obs2_plot_label][: (2 if obs_pair_base else 1)] + group_labels,
-                str(fig_dir / 'SIT_ts_groupmean.png'),
+                str(fig_dir / 'sithick_thickvol_ts_groupmean_raw.png'),
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_metric_stds_for_ts,
             )
@@ -1438,7 +1707,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 [obs1_plot_label] + ([obs2_plot_label] if obs2_diff else []) + group_labels,
                 module_vars['year_range'],
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SIT_ano_groupmean.png'),
+                fig_name=str(fig_dir / 'sithick_thickvol_ano_ts_groupmean_raw.png'),
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_metric_stds_for_ts,
             )
@@ -1447,6 +1716,11 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         _sit_metric_maps = [obs_1m] + ([obs2_1m] if obs2_1m is not None else []) + [d['thick2_metric'] for d in diff_dicts]
         _sit_labels_maps = [obs1_plot_label] + ([obs2_plot_label] if obs2_1m is not None else []) + model_labels_used
 
+        # -----------------------------------------------------------------------------
+        # Function: `_stack_season_maps`.
+        # Purpose: Handle stack season maps workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _stack_season_maps(diag_list: List[Dict[str, Any]], key: str) -> Optional[np.ndarray]:
             ref = None
             for dd in diag_list:
@@ -1474,13 +1748,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                     grid_file, _clim_stack, _sit_labels_maps, hemisphere,
                     sic_range=[0, _clim_max], diff_range=[-_clim_max * 0.5, _clim_max * 0.5],
                     sic_cm=raw_cmap, diff_cm=diff_cmap, unit='m',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SIT_seasonal_clim_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sithick_thick_clim_map_{_season}_raw.png'),
                 )
                 pf.plot_SIC_map(
                     grid_file, _clim_stack, _sit_labels_maps, hemisphere,
                     sic_range=[0, _clim_max], diff_range=[-_clim_max * 0.5, _clim_max * 0.5],
                     sic_cm=raw_cmap, diff_cm=diff_cmap, unit='m',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SIT_seasonal_clim_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sithick_thick_clim_map_{_season}_diff.png'),
                 )
 
             _std_stack = _stack_season_maps(_diags, 'std_map')
@@ -1491,13 +1765,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                     grid_file, _std_stack, _sit_labels_maps, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SIT_seasonal_std_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sithick_thick_dstd_map_{_season}_raw.png'),
                 )
                 pf.plot_SIC_map(
                     grid_file, _std_stack, _sit_labels_maps, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SIT_seasonal_std_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sithick_thick_dstd_map_{_season}_diff.png'),
                 )
 
             _tr_stack = _stack_season_maps(_diags, 'trend_map')
@@ -1508,12 +1782,12 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, _sit_labels_maps, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SIT_seasonal_trend_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sithick_thick_trend_map_{_season}_raw.png'),
                 )
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, _sit_labels_maps, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SIT_seasonal_trend_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sithick_thick_trend_map_{_season}_diff.png'),
                 )
 
         _mon = 3 if hemisphere == 'nh' else 9
@@ -1521,11 +1795,11 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         pf.plot_sit_map(_lon, _lat, all_diff_dicts_map, _mon, hemisphere,
                         data_range=_sit_raw_range, diff_range=_sit_diff_range, model_labels=all_labels_map,
                         cm=raw_cmap, diff_cm=diff_cmap,
-                        plot_mode='raw', fig_name=str(fig_dir / 'SIT_map_raw.png'))
+                        plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_mean_map_raw.png'))
         pf.plot_sit_map(_lon, _lat, all_diff_dicts_map, _mon, hemisphere,
                         data_range=_sit_raw_range, diff_range=_sit_diff_range, model_labels=all_labels_map,
                         cm=raw_cmap, diff_cm=diff_cmap,
-                        plot_mode='diff', fig_name=str(fig_dir / 'SIT_map_diff.png'))
+                        plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_mean_map_diff.png'))
 
         _obs_1m = obs_1m if obs_1m is not None else diff_dicts[0]['thick1_metric']
         _obs2_1m = obs2_1m if obs2_1m is not None else (obs2_diff['thick2_metric'] if obs2_diff is not None else None)
@@ -1534,50 +1808,65 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         pf.plot_SIC_map(grid_file, _thick_std_maps, all_labels_map, hemisphere,
                         sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                        plot_mode='raw', fig_name=str(fig_dir / 'SIT_std_map_raw.png'))
+                        plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_dstd_map_raw.png'))
         pf.plot_SIC_map(grid_file, _thick_std_maps, all_labels_map, hemisphere,
                         sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                        plot_mode='diff', fig_name=str(fig_dir / 'SIT_std_map_diff.png'))
+                        plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_dstd_map_diff.png'))
 
         _thick_tr_maps = np.array([_obs_1m['thick_ano_tr']] + ([_obs2_1m['thick_ano_tr']] if _obs2_1m is not None else []) + [d['thick2_metric']['thick_ano_tr'] for d in diff_dicts])
         _thick_tr_pval = np.array([_obs_1m['thick_ano_tr_p']] + ([_obs2_1m['thick_ano_tr_p']] if _obs2_1m is not None else []) + [d['thick2_metric']['thick_ano_tr_p'] for d in diff_dicts])
         _tr_max = max(0.1, round(float(np.nanpercentile(np.abs(_thick_tr_maps[0]), 95)) * 10) / 10)
         pf.plot_trend_map(grid_file, _thick_tr_maps, _thick_tr_pval, all_labels_map, hemisphere,
                           trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                          plot_mode='raw', fig_name=str(fig_dir / 'SIT_trend_map_raw.png'))
+                          plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_trend_map_raw.png'))
         pf.plot_trend_map(grid_file, _thick_tr_maps, _thick_tr_pval, all_labels_map, hemisphere,
                           trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                          plot_mode='diff', fig_name=str(fig_dir / 'SIT_trend_map_diff.png'))
+                          plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_trend_map_diff.png'))
 
-        _sit_keys = ['thick_mean_diff', 'thick_std_diff', 'thick_trend_diff', 'Vol_mean_diff', 'Vol_std_diff', 'Vol_trend_diff']
+        _sit_key_specs: List[Tuple[str, str]] = [
+            ('thick_mean_diff', 'Thick Mean MAE[Map]'),
+            ('thick_std_diff', 'Thick DStd MAE[Map]'),
+            ('thick_trend_diff', 'Thick Trend MAE[Map]'),
+            ('Vol_mean_diff', 'ThickVol Mean AbsDiff[TS]'),
+            ('Vol_std_diff', 'ThickVol DStd AbsDiff[TS]'),
+            ('Vol_trend_diff', 'ThickVol Trend AbsDiff[TS]'),
+        ]
         for month in key_months:
             mlabel = SIM.SeaIceMetricsBase.month_label(month)
-            _sit_keys.extend([f'{mlabel}_RMSE'])
+            _sit_key_specs.extend([(f'{mlabel}_RMSE', f'{mlabel} Vol RMSE[TS]')])
+        _sit_keys = [kk for kk, _ in _sit_key_specs]
+        _sit_labels = [ll for _, ll in _sit_key_specs]
         _sit_heat = np.array([[d.get(k, float('nan')) for k in _sit_keys] for d in diff_dicts])
+        _sit_cbar_kw = _heatmap_main_cbar_kwargs(len(_sit_keys), len(diff_dicts))
         with _PLOT_LOCK:
-            _fig, _ax = plt.subplots(
-                figsize=(
-                    max(8, len(_sit_keys) * 0.8),
-                    max(3, 1 + len(diff_dicts)) * max(0.1, heat_main_height_scale),
-                )
-            )
+            _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                len(_sit_keys), len(diff_dicts), heat_main_height_scale
+            ))
             if obs2_diff is not None:
                 _obs2_row = np.array([abs(obs2_diff.get(k, float('nan'))) for k in _sit_keys])
                 pf.plot_heat_map(
-                    _sit_heat, model_labels_used, _sit_keys, ax=_ax,
-                    cbarlabel='Ratio to obs uncertainty', obs_row=_obs2_row,
+                    _sit_heat, model_labels_used, _sit_labels, ax=_ax,
+                    cbarlabel='Ratio', obs_row=_obs2_row,
                     obs_row_label=obs2_plot_label,
                     ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                    display_transform='lin2021_norm',
                     cmap=heatmap_cmap,
+                    cbar_kw=_sit_cbar_kw,
                 )
             else:
-                pf.plot_heat_map(_sit_heat, model_labels_used, _sit_keys, ax=_ax, cbarlabel='m', cmap=heatmap_cmap)
-            _fig.tight_layout()
-            pf._save_fig(str(fig_dir / 'heat_map.png'), close=False)
+                pf.plot_heat_map(
+                    _sit_heat, model_labels_used, _sit_labels, ax=_ax,
+                    cbarlabel='m', cmap=heatmap_cmap, cbar_kw=_sit_cbar_kw,
+                )
+            _fig.subplots_adjust(**_common_heatmap_main_adjust(
+                n_models=len(diff_dicts),
+                n_metrics=len(_sit_keys),
+            ))
+            pf._save_fig(str(fig_dir / 'sithick_metrics_heatmap_diff.png'), close=False)
             plt.close(_fig)
 
-        _sit_season_core = ['MeanDiff', 'StdDiff', 'TrendDiff', 'RMSE']
+        _sit_season_core = ['Mean MAE[Map]', 'DStd MAE[Map]', 'Trend MAE[Map]', 'RMSE[TS]']
         _sit_season_keys: List[str] = []
         for _season in _season_names:
             _sit_season_keys.extend([
@@ -1597,14 +1886,12 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
             with _PLOT_LOCK:
                 _n_metric = len(_sit_season_core)
                 _n_rows = max(1, 1 + len(diff_dicts))
-                _panel_w = max(8.0, _n_metric * 0.76)
-                _panel_h = max(3.2, _n_rows * 0.45 + 1.1)
+                _fig_w, _fig_h = _heatmap_seasonal_figsize(
+                    _n_metric, len(diff_dicts), heat_season_height_scale
+                )
                 _fig, _axes = plt.subplots(
                     2, 2,
-                    figsize=(
-                        _panel_w * 2.0 + 1.0,
-                        (_panel_h * 2.0 + 0.4) * max(0.5, heat_season_height_scale),
-                    ),
+                    figsize=(_fig_w, _fig_h),
                     squeeze=False,
                 )
                 _axes_flat = _axes.ravel()
@@ -1635,10 +1922,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                         obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin,
                         ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
                         add_colorbar=False,
+                        show_xticklabels=(_ii >= 2),
+                        show_yticklabels=(_ii % 2 == 0),
                     )
-                    _ax.set_title(str(_season), fontsize=17, pad=8)
+                    _ax.set_title(str(_season), fontsize=17, pad=12)
                     _used_axes.append(_ax)
                     if _first_im is None:
                         _first_im = _im
@@ -1646,34 +1936,34 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 for _jj in range(len(_season_names), len(_axes_flat)):
                     _fig.delaxes(_axes_flat[_jj])
 
-                if _first_im is not None and _used_axes:
-                    _cb = _fig.colorbar(
-                        _first_im,
-                        ax=_used_axes,
-                        orientation='vertical',
-                        fraction=max(0.001, heat_season_cbar_fraction),
-                        pad=max(0.0, heat_season_cbar_pad),
-                        aspect=max(1.0, heat_season_cbar_aspect),
-                        extend=pf._resolve_colorbar_extend(
-                            _first_im,
-                            data=np.abs(_sit_heat_season),
-                            vmin=heat_ratio_vmin,
-                            vmax=heat_ratio_vmax,
-                            extend='auto',
-                        ),
-                    )
-                    _cb.set_label('Ratio to obs uncertainty', fontsize=16)
-                    _cb.ax.tick_params(labelsize=15)
-
-                _fig.subplots_adjust(
-                    left=0.06,
-                    right=min(0.98, max(0.70, heat_season_right)),
-                    top=0.93,
-                    bottom=0.10,
-                    wspace=max(0.0, heat_season_wspace),
-                    hspace=max(0.0, heat_season_hspace),
+                _adj_kw = _heatmap_seasonal_adjust(
+                    n_models=len(diff_dicts),
+                    n_metrics=_n_metric,
+                    wspace=heat_season_wspace,
+                    hspace=heat_season_hspace,
+                    right_margin=heat_season_right,
                 )
-                pf._save_fig(str(fig_dir / 'heat_map_seasonal.png'), close=False)
+                _fig.subplots_adjust(**_adj_kw)
+                if _first_im is not None and _used_axes:
+                    _cb_kw = _heatmap_bottom_cbar_kwargs(
+                        n_metrics=_n_metric,
+                        n_models=len(diff_dicts),
+                        fraction=heat_season_cbar_fraction,
+                        pad=heat_season_cbar_pad,
+                        aspect=heat_season_cbar_aspect,
+                    )
+                    pf._bottom_cbar(
+                        _fig,
+                        _first_im,
+                        _used_axes,
+                        label='Ratio',
+                        extend='auto',
+                        fraction=_cb_kw['fraction'],
+                        pad=_cb_kw['pad'],
+                        aspect=_cb_kw['aspect'],
+                        data=np.abs(_sit_heat_season),
+                    )
+                pf._save_fig(str(fig_dir / 'sithick_metrics_heatmap_seasonal_diff.png'), close=False)
                 plt.close(_fig)
 
         if matched_diff_dicts:
@@ -1703,7 +1993,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 _model_dicts_matched,
                 _all_diff_dicts_map_matched,
                 _all_labels_map_matched,
-                str(fig_dir / 'SIT_ts_matched.png'),
+                str(fig_dir / 'sithick_thickvol_ts_matched_raw.png'),
                 line_style=line_styles, color=line_colors,
             )
             pf.plot_sit_ano(
@@ -1712,7 +2002,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 _all_labels_matched,
                 module_vars['year_range'],
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SIT_ano_matched.png'),
+                fig_name=str(fig_dir / 'sithick_thickvol_ano_ts_matched_raw.png'),
                 line_style=line_styles, color=line_colors,
             )
 
@@ -1730,21 +2020,24 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                     module_vars['year_range'],
                     month,
                     hms=hemisphere,
-                    fig_name=str(fig_dir / f'sithick_ano_timeseries_{mtag}_matched.png'),
+                    fig_name=str(fig_dir / f'sithick_thickvol_ano_ts_{mtag}_matched_raw.png'),
                     line_style=line_styles, color=line_colors,
+                    obs_count=(2 if obs2_diff_matched is not None else 1),
                 )
-                if matched_group_labels and matched_group_model_metric_means_for_ts:
+                if matched_group_labels_for_ts and matched_group_model_metric_means_for_ts:
                     pf.plot_sit_key_month_ano(
                         [obs2_diff_matched['thick1_metric'], obs2_diff_matched['thick2_metric']] + matched_group_model_metric_means_for_ts
                         if obs2_diff_matched is not None else
                         [obs_1m] + matched_group_model_metric_means_for_ts,
-                        [obs1_plot_label, obs2_plot_label][: (2 if obs2_diff_matched is not None else 1)] + matched_group_labels,
+                        [obs1_plot_label, obs2_plot_label][: (2 if obs2_diff_matched is not None else 1)] + matched_group_labels_for_ts,
                         module_vars['year_range'],
                         month,
                         hms=hemisphere,
-                        fig_name=str(fig_dir / f'sithick_ano_timeseries_{mtag}_matched_groupmean.png'),
+                        fig_name=str(fig_dir / f'sithick_thickvol_ano_ts_{mtag}_matched_groupmean_raw.png'),
                         line_style=line_styles, color=line_colors,
                         model_spread_payloads=matched_group_model_metric_stds_for_ts,
+                        obs_count=(2 if obs2_diff_matched is not None else 1),
+                        group_only_mode=True,
                     )
 
             if matched_group_labels and matched_group_model_metric_means_for_ts and matched_group_diff_means_for_ts:
@@ -1752,7 +2045,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                     matched_group_model_metric_means_for_ts,
                     ([_obs_pair_matched] if _obs_pair_matched is not None else []) + matched_group_diff_means_for_ts,
                     [obs1_plot_label, obs2_plot_label][: (2 if _obs_pair_matched is not None else 1)] + matched_group_labels,
-                    str(fig_dir / 'SIT_ts_matched_groupmean.png'),
+                    str(fig_dir / 'sithick_thickvol_ts_matched_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=matched_group_model_metric_stds_for_ts,
                 )
@@ -1762,7 +2055,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                     [obs1_plot_label] + ([obs2_plot_label] if obs2_diff_matched is not None else []) + matched_group_labels,
                     module_vars['year_range'],
                     hms=hemisphere,
-                    fig_name=str(fig_dir / 'SIT_ano_matched_groupmean.png'),
+                    fig_name=str(fig_dir / 'sithick_thickvol_ano_ts_matched_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=matched_group_model_metric_stds_for_ts,
                 )
@@ -1773,13 +2066,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 _lon, _lat, _all_diff_dicts_map_matched, _mon, hemisphere,
                 data_range=_sit_raw_range_m, diff_range=_sit_diff_range_m, model_labels=_all_labels_map_matched,
                 cm=raw_cmap, diff_cm=diff_cmap,
-                plot_mode='raw', fig_name=str(fig_dir / 'SIT_map_matched_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_mean_map_matched_raw.png'),
             )
             pf.plot_sit_map(
                 _lon, _lat, _all_diff_dicts_map_matched, _mon, hemisphere,
                 data_range=_sit_raw_range_m, diff_range=_sit_diff_range_m, model_labels=_all_labels_map_matched,
                 cm=raw_cmap, diff_cm=diff_cmap,
-                plot_mode='diff', fig_name=str(fig_dir / 'SIT_map_matched_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_mean_map_matched_diff.png'),
             )
 
             _obs_1m_matched = (
@@ -1796,13 +2089,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
                 grid_file, _thick_std_maps_matched, _all_labels_map_matched, hemisphere,
                 sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                 sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                plot_mode='raw', fig_name=str(fig_dir / 'SIT_std_map_matched_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_dstd_map_matched_raw.png'),
             )
             pf.plot_SIC_map(
                 grid_file, _thick_std_maps_matched, _all_labels_map_matched, hemisphere,
                 sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                 sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                plot_mode='diff', fig_name=str(fig_dir / 'SIT_std_map_matched_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_dstd_map_matched_diff.png'),
             )
 
             _thick_tr_maps_matched = np.array(
@@ -1819,45 +2112,48 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
             pf.plot_trend_map(
                 grid_file, _thick_tr_maps_matched, _thick_tr_pval_matched, _all_labels_map_matched, hemisphere,
                 trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/decade',
-                plot_mode='raw', fig_name=str(fig_dir / 'SIT_trend_map_matched_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / 'sithick_thick_trend_map_matched_raw.png'),
             )
             pf.plot_trend_map(
                 grid_file, _thick_tr_maps_matched, _thick_tr_pval_matched, _all_labels_map_matched, hemisphere,
                 trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/decade',
-                plot_mode='diff', fig_name=str(fig_dir / 'SIT_trend_map_matched_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / 'sithick_thick_trend_map_matched_diff.png'),
             )
 
             _sit_heat_matched = np.array([[d.get(k, float('nan')) for k in _sit_keys] for d in matched_diff_dicts])
+            _sit_cbar_kw_matched = _heatmap_main_cbar_kwargs(len(_sit_keys), len(matched_diff_dicts))
             with _PLOT_LOCK:
-                _fig, _ax = plt.subplots(
-                    figsize=(
-                        max(8, len(_sit_keys) * 0.8),
-                        max(3, 1 + len(matched_diff_dicts)) * max(0.1, heat_main_height_scale),
-                    )
-                )
+                _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                    len(_sit_keys), len(matched_diff_dicts), heat_main_height_scale
+                ))
                 if obs2_diff_matched is not None:
                     _obs2_row = np.array([abs(obs2_diff_matched.get(k, float('nan'))) for k in _sit_keys])
                     pf.plot_heat_map(
-                        _sit_heat_matched, matched_model_labels_used, _sit_keys, ax=_ax,
-                        cbarlabel='Ratio to obs uncertainty',
+                        _sit_heat_matched, matched_model_labels_used, _sit_labels, ax=_ax,
+                        cbarlabel='Ratio',
                         obs_row=_obs2_row, obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
+                        cbar_kw=_sit_cbar_kw_matched,
                     )
                 else:
                     pf.plot_heat_map(
-                        _sit_heat_matched, matched_model_labels_used, _sit_keys,
-                        ax=_ax, cbarlabel='m', cmap=heatmap_cmap,
+                        _sit_heat_matched, matched_model_labels_used, _sit_labels,
+                        ax=_ax, cbarlabel='m', cmap=heatmap_cmap, cbar_kw=_sit_cbar_kw_matched,
                     )
-                _fig.tight_layout()
-                pf._save_fig(str(fig_dir / 'heat_map_matched.png'), close=False)
+                _fig.subplots_adjust(**_common_heatmap_main_adjust(
+                    n_models=len(matched_diff_dicts),
+                    n_metrics=len(_sit_keys),
+                ))
+                pf._save_fig(str(fig_dir / 'sithick_metrics_heatmap_matched_diff.png'), close=False)
                 plt.close(_fig)
 
         try:
             pf.plot_sic_region_map(
                 grid_nc_file=grid_file,
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+                fig_name=str(fig_dir / 'geo_sector_map.png'),
             )
         except Exception as exc:
             logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -1965,13 +2261,13 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         )
 
     regional_tables: Dict[str, Any] = {'All': all_payload}
-    skip_regional_table_expansion = bool(cache_loaded)
-    if skip_regional_table_expansion:
-        # Keep cache-backed runs responsive: per-sector expansion is expensive
-        # and not required for figure generation.
-        logger.info("Skip regional %s table expansion in cache-backed run.", module)
+    if cache_loaded:
+        logger.info(
+            "Cache-backed %s run: expanding regional scalar tables for HTML stats.",
+            module,
+        )
 
-    if (not skip_regional_table_expansion) and (not obs_files or not model_files):
+    if not obs_files or not model_files:
         try:
             _, obs_files, model_files = _run_preprocessing(
                 case_name, module, recipe, data_dir, frequency='monthly', jobs=jobs
@@ -1980,7 +2276,7 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
             logger.warning("Failed to recover processed file list for regional %s tables (%s).", module, exc)
             obs_files, model_files = [], []
 
-    if (not skip_regional_table_expansion) and obs_files and model_files:
+    if obs_files and model_files:
         logger.info("Computing regional %s scalar tables ...", module)
         metric = _get_metric(module_vars)
         thick_metrics_region = SIM.ThicknessMetrics(
@@ -2149,6 +2445,11 @@ def eval_sithick(case_name: str, recipe: RR.RecipeReader,
         payload_type='region_dual_table',
     )
 
+# -----------------------------------------------------------------------------
+# Function: `eval_sndepth`.
+# Purpose: Handle eval sndepth workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                  data_dir: str, output_dir: str,
                  recalculate: bool = False,
@@ -2418,7 +2719,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
     group_model_metric_means_for_ts: List[Any] = []
     group_model_metric_stds_for_ts: List[Any] = []
     group_diff_means_for_ts: List[Any] = []
-    group_diff_stds_for_ts: List[Any] = []
+    _group_diff_stds_for_ts: List[Any] = []
     if group_specs and base_model_metric_payloads_for_ts:
         group_model_metric_means_for_ts, group_model_metric_stds_for_ts, group_labels_for_ts = _build_group_mean_std_payloads(
             model_payloads=base_model_metric_payloads_for_ts,
@@ -2426,7 +2727,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             group_specs=group_specs,
         )
     if group_specs and base_diff_dicts_for_ts:
-        group_diff_means_for_ts, group_diff_stds_for_ts, _gd_labels = _build_group_mean_std_payloads(
+        group_diff_means_for_ts, _group_diff_stds_for_ts, _gd_labels = _build_group_mean_std_payloads(
             model_payloads=base_diff_dicts_for_ts,
             model_labels=list(base_model_labels_for_ts),
             group_specs=group_specs,
@@ -2448,7 +2749,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
     matched_group_model_metric_means_for_ts: List[Any] = []
     matched_group_model_metric_stds_for_ts: List[Any] = []
     matched_group_diff_means_for_ts: List[Any] = []
-    matched_group_diff_stds_for_ts: List[Any] = []
+    _matched_group_diff_stds_for_ts: List[Any] = []
     if matched_group_specs and base_matched_model_metric_payloads_for_ts:
         matched_group_model_metric_means_for_ts, matched_group_model_metric_stds_for_ts, matched_group_labels_for_ts = _build_group_mean_std_payloads(
             model_payloads=base_matched_model_metric_payloads_for_ts,
@@ -2456,7 +2757,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             group_specs=matched_group_specs,
         )
     if matched_group_specs and base_matched_diff_dicts_for_ts:
-        matched_group_diff_means_for_ts, matched_group_diff_stds_for_ts, _mgd_labels = _build_group_mean_std_payloads(
+        matched_group_diff_means_for_ts, _matched_group_diff_stds_for_ts, _mgd_labels = _build_group_mean_std_payloads(
             model_payloads=base_matched_diff_dicts_for_ts,
             model_labels=list(base_matched_labels_for_ts),
             group_specs=matched_group_specs,
@@ -2466,13 +2767,19 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
         logger.info('Generating figures ...')
         fig_dir = Path(output_dir) / module
         fig_dir.mkdir(parents=True, exist_ok=True)
+        # Remove legacy PNGs from previous naming schemes to avoid mixed HTML listing.
+        for _stale_png in fig_dir.glob('*.png'):
+            try:
+                _stale_png.unlink()
+            except Exception:
+                continue
         key_months = SIM.SeaIceMetricsBase.resolve_key_months(hemisphere)
 
         obs_pair_base, all_diff_dicts_map_base, all_labels_map_base, all_diff_dicts_base, all_labels_base, model_dicts_base = \
             _build_thickness_label_sets(
                 obs_1m, obs2_1m, obs2_diff, base_diff_dicts_for_ts, base_model_labels_for_ts, obs_labels=obs_labels
             )
-        obs_pair, all_diff_dicts_map, all_labels_map, all_diff_dicts, all_labels, model_dicts = \
+        _, all_diff_dicts_map, all_labels_map, _, _, _ = \
             _build_thickness_label_sets(
                 obs_1m, obs2_1m, obs2_diff, diff_dicts, model_labels_used, obs_labels=obs_labels
             )
@@ -2481,12 +2788,12 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             _lon, _lat = np.array(ds['lon']), np.array(ds['lat'])
 
         pf.plot_snd_ts(
-            model_dicts_base, all_diff_dicts_map_base, all_labels_map_base, str(fig_dir / 'SND_ts.png'),
+            model_dicts_base, all_diff_dicts_map_base, all_labels_map_base, str(fig_dir / 'sndepth_snowvol_ts_raw.png'),
             line_style=line_styles, color=line_colors,
         )
         pf.plot_snd_ano(
             model_dicts_base, all_diff_dicts_base, all_labels_base, module_vars['year_range'],
-            fig_name=str(fig_dir / 'SND_ano.png'),
+            fig_name=str(fig_dir / 'sndepth_snowvol_ano_ts_raw.png'),
             line_style=line_styles, color=line_colors,
         )
         _snd_metric_all = [obs_1m] + ([obs2_1m] if obs2_1m is not None else []) + [d['thick2_metric'] for d in base_diff_dicts_for_ts]
@@ -2495,17 +2802,20 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             mtag = SIM.SeaIceMetricsBase.month_tag(month)
             pf.plot_snd_key_month_ano(
                 _snd_metric_all, _snd_labels_all, module_vars['year_range'], month,
-                hms=hemisphere, fig_name=str(fig_dir / f'sndepth_ano_timeseries_{mtag}.png'),
+                hms=hemisphere, fig_name=str(fig_dir / f'sndepth_snowvol_ano_ts_{mtag}_raw.png'),
                 line_style=line_styles, color=line_colors,
+                obs_count=(2 if obs2_1m is not None else 1),
             )
             if group_labels_for_ts and group_model_metric_means_for_ts:
                 pf.plot_snd_key_month_ano(
                     [obs_1m] + ([obs2_1m] if obs2_1m is not None else []) + group_model_metric_means_for_ts,
                     [obs1_plot_label] + ([obs2_plot_label] if obs2_1m is not None else []) + group_labels_for_ts,
                     module_vars['year_range'], month,
-                    hms=hemisphere, fig_name=str(fig_dir / f'sndepth_ano_timeseries_{mtag}_groupmean.png'),
+                    hms=hemisphere, fig_name=str(fig_dir / f'sndepth_snowvol_ano_ts_{mtag}_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=group_model_metric_stds_for_ts,
+                    obs_count=(2 if obs2_1m is not None else 1),
+                    group_only_mode=True,
                 )
 
         if group_labels_for_ts and group_model_metric_means_for_ts and group_diff_means_for_ts:
@@ -2513,7 +2823,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 group_model_metric_means_for_ts,
                 ([obs_pair_base] if obs_pair_base else []) + group_diff_means_for_ts,
                 [obs1_plot_label, obs2_plot_label][: (2 if obs_pair_base else 1)] + group_labels_for_ts,
-                str(fig_dir / 'SND_ts_groupmean.png'),
+                str(fig_dir / 'sndepth_snowvol_ts_groupmean_raw.png'),
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_metric_stds_for_ts,
             )
@@ -2522,7 +2832,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 ([obs2_diff] if obs2_diff else []) + group_diff_means_for_ts,
                 [obs1_plot_label] + ([obs2_plot_label] if obs2_diff else []) + group_labels_for_ts,
                 module_vars['year_range'],
-                fig_name=str(fig_dir / 'SND_ano_groupmean.png'),
+                fig_name=str(fig_dir / 'sndepth_snowvol_ano_ts_groupmean_raw.png'),
                 line_style=line_styles, color=line_colors,
                 model_spread_payloads=group_model_metric_stds_for_ts,
             )
@@ -2531,6 +2841,11 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
         _snd_metric_maps = [obs_1m] + ([obs2_1m] if obs2_1m is not None else []) + [d['thick2_metric'] for d in diff_dicts]
         _snd_labels_maps = [obs1_plot_label] + ([obs2_plot_label] if obs2_1m is not None else []) + model_labels_used
 
+        # -----------------------------------------------------------------------------
+        # Function: `_stack_snd_season_maps`.
+        # Purpose: Handle stack snd season maps workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _stack_snd_season_maps(diag_list: List[Dict[str, Any]], key: str) -> Optional[np.ndarray]:
             ref = None
             for dd in diag_list:
@@ -2558,13 +2873,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     grid_file, _clim_stack, _snd_labels_maps, hemisphere,
                     sic_range=[0, _clim_max], diff_range=[-_clim_max * 0.5, _clim_max * 0.5],
                     sic_cm=raw_cmap, diff_cm=diff_cmap, unit='m',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SND_seasonal_clim_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sndepth_snow_clim_map_{_season}_raw.png'),
                 )
                 pf.plot_SIC_map(
                     grid_file, _clim_stack, _snd_labels_maps, hemisphere,
                     sic_range=[0, _clim_max], diff_range=[-_clim_max * 0.5, _clim_max * 0.5],
                     sic_cm=raw_cmap, diff_cm=diff_cmap, unit='m',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SND_seasonal_clim_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sndepth_snow_clim_map_{_season}_diff.png'),
                 )
 
             _std_stack = _stack_snd_season_maps(_diags, 'std_map')
@@ -2575,13 +2890,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     grid_file, _std_stack, _snd_labels_maps, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SND_seasonal_std_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sndepth_snow_dstd_map_{_season}_raw.png'),
                 )
                 pf.plot_SIC_map(
                     grid_file, _std_stack, _snd_labels_maps, hemisphere,
                     sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                     sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SND_seasonal_std_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sndepth_snow_dstd_map_{_season}_diff.png'),
                 )
 
             _tr_stack = _stack_snd_season_maps(_diags, 'trend_map')
@@ -2592,12 +2907,12 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, _snd_labels_maps, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                    plot_mode='raw', fig_name=str(fig_dir / f'SND_seasonal_trend_{_season}_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sndepth_snow_trend_map_{_season}_raw.png'),
                 )
                 pf.plot_trend_map(
                     grid_file, _tr_stack, _trp_stack, _snd_labels_maps, hemisphere,
                     trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                    plot_mode='diff', fig_name=str(fig_dir / f'SND_seasonal_trend_{_season}_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sndepth_snow_trend_map_{_season}_diff.png'),
                 )
 
         _ref_mons = obs_1m.get('uni_mon') if obs_1m is not None else None
@@ -2607,11 +2922,11 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             pf.plot_snd_map(_lon, _lat, all_diff_dicts_map, _mon, hemisphere,
                             data_range=[0, 0.5], diff_range=[-0.3, 0.3], model_labels=all_labels_map,
                             cm=raw_cmap, diff_cm=diff_cmap,
-                            plot_mode='raw', fig_name=str(fig_dir / f'SND_map_{_mon_str}_raw.png'))
+                            plot_mode='raw', fig_name=str(fig_dir / f'sndepth_snow_mean_map_{_mon_str}_raw.png'))
             pf.plot_snd_map(_lon, _lat, all_diff_dicts_map, _mon, hemisphere,
                             data_range=[0, 0.5], diff_range=[-0.3, 0.3], model_labels=all_labels_map,
                             cm=raw_cmap, diff_cm=diff_cmap,
-                            plot_mode='diff', fig_name=str(fig_dir / f'SND_map_{_mon_str}_diff.png'))
+                            plot_mode='diff', fig_name=str(fig_dir / f'sndepth_snow_mean_map_{_mon_str}_diff.png'))
 
         _obs_1m = obs_1m if obs_1m is not None else diff_dicts[0]['thick1_metric']
         _obs2_1m = obs2_1m if obs2_1m is not None else (obs2_diff['thick2_metric'] if obs2_diff is not None else None)
@@ -2620,47 +2935,62 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
         pf.plot_SIC_map(grid_file, _snd_std_maps, all_labels_map, hemisphere,
                         sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                        plot_mode='raw', fig_name=str(fig_dir / 'SND_std_map_raw.png'))
+                        plot_mode='raw', fig_name=str(fig_dir / 'sndepth_snow_dstd_map_raw.png'))
         pf.plot_SIC_map(grid_file, _snd_std_maps, all_labels_map, hemisphere,
                         sic_range=[0, _std_max], diff_range=[-_std_max * 0.5, _std_max * 0.5],
                         sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                        plot_mode='diff', fig_name=str(fig_dir / 'SND_std_map_diff.png'))
+                        plot_mode='diff', fig_name=str(fig_dir / 'sndepth_snow_dstd_map_diff.png'))
 
         _snd_tr_maps = np.array([_obs_1m['thick_ano_tr']] + ([_obs2_1m['thick_ano_tr']] if _obs2_1m is not None else []) + [d['thick2_metric']['thick_ano_tr'] for d in diff_dicts])
         _snd_tr_pval = np.array([_obs_1m['thick_ano_tr_p']] + ([_obs2_1m['thick_ano_tr_p']] if _obs2_1m is not None else []) + [d['thick2_metric']['thick_ano_tr_p'] for d in diff_dicts])
         _tr_max = max(0.01, round(float(np.nanpercentile(np.abs(_snd_tr_maps[0]), 95)) * 100) / 100)
         pf.plot_trend_map(grid_file, _snd_tr_maps, _snd_tr_pval, all_labels_map, hemisphere,
                           trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                          plot_mode='raw', fig_name=str(fig_dir / 'SND_trend_map_raw.png'))
+                          plot_mode='raw', fig_name=str(fig_dir / 'sndepth_snow_trend_map_raw.png'))
         pf.plot_trend_map(grid_file, _snd_tr_maps, _snd_tr_pval, all_labels_map, hemisphere,
                           trend_range=[-_tr_max, _tr_max], cmap=trend_cmap, unit='m/decade',
-                          plot_mode='diff', fig_name=str(fig_dir / 'SND_trend_map_diff.png'))
+                          plot_mode='diff', fig_name=str(fig_dir / 'sndepth_snow_trend_map_diff.png'))
 
-        _snd_keys = ['thick_mean_diff', 'thick_std_diff', 'thick_trend_diff', 'Vol_mean_diff', 'Vol_std_diff', 'Vol_trend_diff']
+        _snd_key_specs: List[Tuple[str, str]] = [
+            ('thick_mean_diff', 'Snow Mean MAE[Map]'),
+            ('thick_std_diff', 'Snow DStd MAE[Map]'),
+            ('thick_trend_diff', 'Snow Trend MAE[Map]'),
+            ('Vol_mean_diff', 'SnowVol Mean AbsDiff[TS]'),
+            ('Vol_std_diff', 'SnowVol DStd AbsDiff[TS]'),
+            ('Vol_trend_diff', 'SnowVol Trend AbsDiff[TS]'),
+        ]
+        _snd_keys = [kk for kk, _ in _snd_key_specs]
+        _snd_labels = [ll for _, ll in _snd_key_specs]
         _snd_heat = np.array([[d.get(k, float('nan')) for k in _snd_keys] for d in diff_dicts])
+        _snd_cbar_kw = _heatmap_main_cbar_kwargs(len(_snd_keys), len(diff_dicts))
         with _PLOT_LOCK:
-            _fig, _ax = plt.subplots(
-                figsize=(
-                    max(8, len(_snd_keys) * 0.8),
-                    max(3, 1 + len(diff_dicts)) * max(0.1, heat_main_height_scale),
-                )
-            )
+            _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                len(_snd_keys), len(diff_dicts), heat_main_height_scale
+            ))
             if obs2_diff is not None:
                 _obs2_row = np.array([abs(obs2_diff.get(k, float('nan'))) for k in _snd_keys])
                 pf.plot_heat_map(
-                    _snd_heat, model_labels_used, _snd_keys, ax=_ax,
-                    cbarlabel='Ratio to obs uncertainty', obs_row=_obs2_row,
+                    _snd_heat, model_labels_used, _snd_labels, ax=_ax,
+                    cbarlabel='Ratio', obs_row=_obs2_row,
                     obs_row_label=obs2_plot_label,
                     ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                    display_transform='lin2021_norm',
                     cmap=heatmap_cmap,
+                    cbar_kw=_snd_cbar_kw,
                 )
             else:
-                pf.plot_heat_map(_snd_heat, model_labels_used, _snd_keys, ax=_ax, cbarlabel='m', cmap=heatmap_cmap)
-            _fig.tight_layout()
-            pf._save_fig(str(fig_dir / 'heat_map.png'), close=False)
+                pf.plot_heat_map(
+                    _snd_heat, model_labels_used, _snd_labels, ax=_ax,
+                    cbarlabel='m', cmap=heatmap_cmap, cbar_kw=_snd_cbar_kw,
+                )
+            _fig.subplots_adjust(**_common_heatmap_main_adjust(
+                n_models=len(diff_dicts),
+                n_metrics=len(_snd_keys),
+            ))
+            pf._save_fig(str(fig_dir / 'sndepth_metrics_heatmap_diff.png'), close=False)
             plt.close(_fig)
 
-        _snd_season_core = ['MeanDiff', 'StdDiff', 'TrendDiff', 'RMSE']
+        _snd_season_core = ['Mean MAE[Map]', 'DStd MAE[Map]', 'Trend MAE[Map]', 'RMSE[TS]']
         _snd_season_keys: List[str] = []
         for _season in _season_names:
             _snd_season_keys.extend([
@@ -2680,14 +3010,12 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             with _PLOT_LOCK:
                 _n_metric = len(_snd_season_core)
                 _n_rows = max(1, 1 + len(diff_dicts))
-                _panel_w = max(8.0, _n_metric * 0.76)
-                _panel_h = max(3.2, _n_rows * 0.45 + 1.1)
+                _fig_w, _fig_h = _heatmap_seasonal_figsize(
+                    _n_metric, len(diff_dicts), heat_season_height_scale
+                )
                 _fig, _axes = plt.subplots(
                     2, 2,
-                    figsize=(
-                        _panel_w * 2.0 + 1.0,
-                        (_panel_h * 2.0 + 0.4) * max(0.5, heat_season_height_scale),
-                    ),
+                    figsize=(_fig_w, _fig_h),
                     squeeze=False,
                 )
                 _axes_flat = _axes.ravel()
@@ -2718,10 +3046,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                         obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin,
                         ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
                         add_colorbar=False,
+                        show_xticklabels=(_ii >= 2),
+                        show_yticklabels=(_ii % 2 == 0),
                     )
-                    _ax.set_title(str(_season), fontsize=17, pad=8)
+                    _ax.set_title(str(_season), fontsize=17, pad=12)
                     _used_axes.append(_ax)
                     if _first_im is None:
                         _first_im = _im
@@ -2729,45 +3060,34 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 for _jj in range(len(_season_names), len(_axes_flat)):
                     _fig.delaxes(_axes_flat[_jj])
 
-                if _first_im is not None and _used_axes:
-                    _snd_extend = pf._resolve_colorbar_extend(
-                        _first_im,
-                        data=np.abs(_snd_heat_season),
-                        vmin=heat_ratio_vmin,
-                        vmax=heat_ratio_vmax,
-                        extend='auto',
-                    )
-                    try:
-                        _snd_max = float(np.nanmax(np.abs(_snd_heat_season)))
-                    except Exception:
-                        _snd_max = np.nan
-                    _tol = max(1e-12, 1e-8 * max(1.0, abs(float(heat_ratio_vmax))))
-                    if np.isfinite(_snd_max) and _snd_max >= (float(heat_ratio_vmax) - _tol):
-                        if _snd_extend == 'neither':
-                            _snd_extend = 'max'
-                        elif _snd_extend == 'min':
-                            _snd_extend = 'both'
-                    _cb = _fig.colorbar(
-                        _first_im,
-                        ax=_used_axes,
-                        orientation='vertical',
-                        fraction=max(0.001, heat_season_cbar_fraction),
-                        pad=max(0.0, heat_season_cbar_pad),
-                        aspect=max(1.0, heat_season_cbar_aspect),
-                        extend=_snd_extend,
-                    )
-                    _cb.set_label('Ratio to obs uncertainty', fontsize=16)
-                    _cb.ax.tick_params(labelsize=15)
-
-                _fig.subplots_adjust(
-                    left=0.06,
-                    right=min(0.98, max(0.70, heat_season_right)),
-                    top=0.93,
-                    bottom=0.10,
-                    wspace=max(0.0, heat_season_wspace),
-                    hspace=max(0.0, heat_season_hspace),
+                _adj_kw = _heatmap_seasonal_adjust(
+                    n_models=len(diff_dicts),
+                    n_metrics=_n_metric,
+                    wspace=heat_season_wspace,
+                    hspace=heat_season_hspace,
+                    right_margin=heat_season_right,
                 )
-                pf._save_fig(str(fig_dir / 'heat_map_seasonal.png'), close=False)
+                _fig.subplots_adjust(**_adj_kw)
+                if _first_im is not None and _used_axes:
+                    _cb_kw = _heatmap_bottom_cbar_kwargs(
+                        n_metrics=_n_metric,
+                        n_models=len(diff_dicts),
+                        fraction=heat_season_cbar_fraction,
+                        pad=heat_season_cbar_pad,
+                        aspect=heat_season_cbar_aspect,
+                    )
+                    pf._bottom_cbar(
+                        _fig,
+                        _first_im,
+                        _used_axes,
+                        label='Ratio',
+                        extend='auto',
+                        fraction=_cb_kw['fraction'],
+                        pad=_cb_kw['pad'],
+                        aspect=_cb_kw['aspect'],
+                        data=np.abs(_snd_heat_season),
+                    )
+                pf._save_fig(str(fig_dir / 'sndepth_metrics_heatmap_seasonal_diff.png'), close=False)
                 plt.close(_fig)
 
         if matched_diff_dicts:
@@ -2797,7 +3117,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 _model_dicts_matched,
                 _all_diff_dicts_map_matched,
                 _all_labels_map_matched,
-                str(fig_dir / 'SND_ts_matched.png'),
+                str(fig_dir / 'sndepth_snowvol_ts_matched_raw.png'),
                 line_style=line_styles, color=line_colors,
             )
             pf.plot_snd_ano(
@@ -2805,7 +3125,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 _all_diff_dicts_matched,
                 _all_labels_matched,
                 module_vars['year_range'],
-                fig_name=str(fig_dir / 'SND_ano_matched.png'),
+                fig_name=str(fig_dir / 'sndepth_snowvol_ano_ts_matched_raw.png'),
                 line_style=line_styles, color=line_colors,
             )
             if obs2_diff_matched is not None:
@@ -2822,8 +3142,9 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     module_vars['year_range'],
                     month,
                     hms=hemisphere,
-                    fig_name=str(fig_dir / f'sndepth_ano_timeseries_{mtag}_matched.png'),
+                    fig_name=str(fig_dir / f'sndepth_snowvol_ano_ts_{mtag}_matched_raw.png'),
                     line_style=line_styles, color=line_colors,
+                    obs_count=(2 if obs2_diff_matched is not None else 1),
                 )
                 if matched_group_labels_for_ts and matched_group_model_metric_means_for_ts:
                     pf.plot_snd_key_month_ano(
@@ -2834,9 +3155,11 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                         module_vars['year_range'],
                         month,
                         hms=hemisphere,
-                        fig_name=str(fig_dir / f'sndepth_ano_timeseries_{mtag}_matched_groupmean.png'),
+                        fig_name=str(fig_dir / f'sndepth_snowvol_ano_ts_{mtag}_matched_groupmean_raw.png'),
                         line_style=line_styles, color=line_colors,
                         model_spread_payloads=matched_group_model_metric_stds_for_ts,
+                        obs_count=(2 if obs2_diff_matched is not None else 1),
+                        group_only_mode=True,
                     )
 
             if matched_group_labels_for_ts and matched_group_model_metric_means_for_ts and matched_group_diff_means_for_ts:
@@ -2844,7 +3167,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     matched_group_model_metric_means_for_ts,
                     ([_obs_pair_matched] if _obs_pair_matched is not None else []) + matched_group_diff_means_for_ts,
                     [obs1_plot_label, obs2_plot_label][: (2 if _obs_pair_matched is not None else 1)] + matched_group_labels_for_ts,
-                    str(fig_dir / 'SND_ts_matched_groupmean.png'),
+                    str(fig_dir / 'sndepth_snowvol_ts_matched_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=matched_group_model_metric_stds_for_ts,
                 )
@@ -2853,7 +3176,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     ([obs2_diff_matched] if obs2_diff_matched is not None else []) + matched_group_diff_means_for_ts,
                     [obs1_plot_label] + ([obs2_plot_label] if obs2_diff_matched is not None else []) + matched_group_labels_for_ts,
                     module_vars['year_range'],
-                    fig_name=str(fig_dir / 'SND_ano_matched_groupmean.png'),
+                    fig_name=str(fig_dir / 'sndepth_snowvol_ano_ts_matched_groupmean_raw.png'),
                     line_style=line_styles, color=line_colors,
                     model_spread_payloads=matched_group_model_metric_stds_for_ts,
                 )
@@ -2870,13 +3193,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                     _lon, _lat, _all_diff_dicts_map_matched, _mon, hemisphere,
                     data_range=[0, 0.5], diff_range=[-0.3, 0.3], model_labels=_all_labels_map_matched,
                     cm=raw_cmap, diff_cm=diff_cmap,
-                    plot_mode='raw', fig_name=str(fig_dir / f'SND_map_{_mon_str}_matched_raw.png'),
+                    plot_mode='raw', fig_name=str(fig_dir / f'sndepth_snow_mean_map_{_mon_str}_matched_raw.png'),
                 )
                 pf.plot_snd_map(
                     _lon, _lat, _all_diff_dicts_map_matched, _mon, hemisphere,
                     data_range=[0, 0.5], diff_range=[-0.3, 0.3], model_labels=_all_labels_map_matched,
                     cm=raw_cmap, diff_cm=diff_cmap,
-                    plot_mode='diff', fig_name=str(fig_dir / f'SND_map_{_mon_str}_matched_diff.png'),
+                    plot_mode='diff', fig_name=str(fig_dir / f'sndepth_snow_mean_map_{_mon_str}_matched_diff.png'),
                 )
 
             _obs_1m_matched = (
@@ -2893,13 +3216,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
                 grid_file, _snd_std_maps_matched, _all_labels_map_matched, hemisphere,
                 sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                 sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                plot_mode='raw', fig_name=str(fig_dir / 'SND_std_map_matched_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / 'sndepth_snow_dstd_map_matched_raw.png'),
             )
             pf.plot_SIC_map(
                 grid_file, _snd_std_maps_matched, _all_labels_map_matched, hemisphere,
                 sic_range=[0, _std_max_matched], diff_range=[-_std_max_matched * 0.5, _std_max_matched * 0.5],
                 sic_cm=std_raw_cmap, diff_cm=std_diff_cmap, unit='m',
-                plot_mode='diff', fig_name=str(fig_dir / 'SND_std_map_matched_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / 'sndepth_snow_dstd_map_matched_diff.png'),
             )
 
             _snd_tr_maps_matched = np.array(
@@ -2916,45 +3239,48 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             pf.plot_trend_map(
                 grid_file, _snd_tr_maps_matched, _snd_tr_pval_matched, _all_labels_map_matched, hemisphere,
                 trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/decade',
-                plot_mode='raw', fig_name=str(fig_dir / 'SND_trend_map_matched_raw.png'),
+                plot_mode='raw', fig_name=str(fig_dir / 'sndepth_snow_trend_map_matched_raw.png'),
             )
             pf.plot_trend_map(
                 grid_file, _snd_tr_maps_matched, _snd_tr_pval_matched, _all_labels_map_matched, hemisphere,
                 trend_range=[-_tr_max_matched, _tr_max_matched], cmap=trend_cmap, unit='m/decade',
-                plot_mode='diff', fig_name=str(fig_dir / 'SND_trend_map_matched_diff.png'),
+                plot_mode='diff', fig_name=str(fig_dir / 'sndepth_snow_trend_map_matched_diff.png'),
             )
 
             _snd_heat_matched = np.array([[d.get(k, float('nan')) for k in _snd_keys] for d in matched_diff_dicts])
+            _snd_cbar_kw_matched = _heatmap_main_cbar_kwargs(len(_snd_keys), len(matched_diff_dicts))
             with _PLOT_LOCK:
-                _fig, _ax = plt.subplots(
-                    figsize=(
-                        max(8, len(_snd_keys) * 0.8),
-                        max(3, 1 + len(matched_diff_dicts)) * max(0.1, heat_main_height_scale),
-                    )
-                )
+                _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                    len(_snd_keys), len(matched_diff_dicts), heat_main_height_scale
+                ))
                 if obs2_diff_matched is not None:
                     _obs2_row = np.array([abs(obs2_diff_matched.get(k, float('nan'))) for k in _snd_keys])
                     pf.plot_heat_map(
-                        _snd_heat_matched, matched_model_labels_used, _snd_keys, ax=_ax,
-                        cbarlabel='Ratio to obs uncertainty',
+                        _snd_heat_matched, matched_model_labels_used, _snd_labels, ax=_ax,
+                        cbarlabel='Ratio',
                         obs_row=_obs2_row, obs_row_label=obs2_plot_label,
                         ratio_vmin=heat_ratio_vmin, ratio_vmax=heat_ratio_vmax,
+                        display_transform='lin2021_norm',
                         cmap=heatmap_cmap,
+                        cbar_kw=_snd_cbar_kw_matched,
                     )
                 else:
                     pf.plot_heat_map(
-                        _snd_heat_matched, matched_model_labels_used, _snd_keys,
-                        ax=_ax, cbarlabel='m', cmap=heatmap_cmap,
+                        _snd_heat_matched, matched_model_labels_used, _snd_labels,
+                        ax=_ax, cbarlabel='m', cmap=heatmap_cmap, cbar_kw=_snd_cbar_kw_matched,
                     )
-                _fig.tight_layout()
-                pf._save_fig(str(fig_dir / 'heat_map_matched.png'), close=False)
+                _fig.subplots_adjust(**_common_heatmap_main_adjust(
+                    n_models=len(matched_diff_dicts),
+                    n_metrics=len(_snd_keys),
+                ))
+                pf._save_fig(str(fig_dir / 'sndepth_metrics_heatmap_matched_diff.png'), close=False)
                 plt.close(_fig)
 
         try:
             pf.plot_sic_region_map(
                 grid_nc_file=grid_file,
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+                fig_name=str(fig_dir / 'geo_sector_map.png'),
             )
         except Exception as exc:
             logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -3062,13 +3388,13 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
         )
 
     regional_tables: Dict[str, Any] = {'All': all_payload}
-    skip_regional_table_expansion = bool(cache_loaded)
-    if skip_regional_table_expansion:
-        # Keep cache-backed runs responsive: per-sector expansion is expensive
-        # and not required for figure generation.
-        logger.info("Skip regional %s table expansion in cache-backed run.", module)
+    if cache_loaded:
+        logger.info(
+            "Cache-backed %s run: expanding regional scalar tables for HTML stats.",
+            module,
+        )
 
-    if (not skip_regional_table_expansion) and (not obs_files or not model_files):
+    if not obs_files or not model_files:
         try:
             _, obs_files, model_files = _run_preprocessing(
                 case_name, module, recipe, data_dir, frequency='monthly', jobs=jobs
@@ -3077,7 +3403,7 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             logger.warning("Failed to recover processed file list for regional %s tables (%s).", module, exc)
             obs_files, model_files = [], []
 
-    if (not skip_regional_table_expansion) and obs_files and model_files:
+    if obs_files and model_files:
         logger.info("Computing regional %s scalar tables ...", module)
         metric = _get_metric(module_vars)
         thick_metrics_region = SIM.ThicknessMetrics(

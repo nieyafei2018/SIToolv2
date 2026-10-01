@@ -9,10 +9,18 @@ globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 from scripts.pipeline.modules.common import (
     _apply_plot_runtime_options,
     _check_outputs_exist,
+    _heatmap_main_adjust,
+    _heatmap_main_cbar_kwargs,
+    _heatmap_main_figsize,
     _load_plot_options,
     _plot_options_get_module,
 )
 
+# -----------------------------------------------------------------------------
+# Function: `eval_sitrans`.
+# Purpose: Handle eval sitrans workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                  data_dir: str, output_dir: str,
                  recalculate: bool = False,
@@ -40,6 +48,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
         plot_opts, module, ['heatmap', 'main_height_scale'], 0.50,
     ))
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_float_opt`.
+    # Purpose: Handle to float opt workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _to_float_opt(value, default: float) -> float:
         try:
             out = float(value)
@@ -47,6 +60,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
         except Exception:
             return float(default)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_int_opt`.
+    # Purpose: Handle to int opt workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _to_int_opt(value, default: int, min_val: int) -> int:
         try:
             out = int(round(float(value)))
@@ -91,6 +109,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
     obs1_plot_label = obs_labels[0] if len(obs_labels) >= 1 else 'Obs1'
     obs2_plot_label = obs_labels[1] if len(obs_labels) >= 2 else 'Obs2'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_extract_sitrans_obs_payload`.
+    # Purpose: Handle extract sitrans obs payload workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _extract_sitrans_obs_payload(pair_metrics: Optional[dict]) -> Optional[dict]:
         if not isinstance(pair_metrics, dict):
             return None
@@ -141,6 +164,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                 payload[out_key] = np.array(pair_metrics[src_key], dtype=float)
         return payload
 
+    # -----------------------------------------------------------------------------
+    # Function: `_extract_sitrans_mod_payload`.
+    # Purpose: Handle extract sitrans mod payload workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _extract_sitrans_mod_payload(pair_metrics: Optional[dict]) -> Optional[dict]:
         if not isinstance(pair_metrics, dict):
             return None
@@ -191,6 +219,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                 payload[out_key] = np.array(pair_metrics[src_key], dtype=float)
         return payload
 
+    # -----------------------------------------------------------------------------
+    # Function: `_obs_payload_to_plot_dict`.
+    # Purpose: Handle obs payload to plot dict workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _obs_payload_to_plot_dict(payload: Optional[dict]) -> Optional[dict]:
         if not isinstance(payload, dict):
             return None
@@ -206,7 +239,17 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             'retreat_trend_obs': np.array(payload['retreat_trend'], dtype=float),
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `_build_scalar_row`.
+    # Purpose: Handle build scalar row workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _build_scalar_row(metrics: Dict[str, Any]) -> Dict[str, float]:
+        # -----------------------------------------------------------------------------
+        # Function: `_g`.
+        # Purpose: Handle g workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _g(key: str) -> float:
             val = metrics.get(key, np.nan)
             try:
@@ -215,19 +258,35 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             except Exception:
                 return np.nan
 
+        # -----------------------------------------------------------------------------
+        # Function: `_diff`.
+        # Purpose: Handle diff workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
+        def _diff(mod_key: str, obs_key: str) -> float:
+            vm = _g(mod_key)
+            vo = _g(obs_key)
+            if not (np.isfinite(vm) and np.isfinite(vo)):
+                return np.nan
+            return float(vm - vo)
+
         return {
             'advance_corr': _g('advance_corr'),
             'advance_rmse': _g('advance_rmse'),
             'advance_mean_bias': _g('advance_mean_bias'),
             'advance_trend_bias': _g('advance_trend_bias'),
             'advance_trend_sig_fraction_mod': _g('advance_trend_sig_fraction_mod'),
+            'advance_trend_sig_fraction_diff': _diff('advance_trend_sig_fraction_mod', 'advance_trend_sig_fraction_obs'),
             'advance_valid_year_mean_mod': _g('advance_valid_year_mean_mod'),
+            'advance_valid_year_mean_diff': _diff('advance_valid_year_mean_mod', 'advance_valid_year_mean_obs'),
             'retreat_corr': _g('retreat_corr'),
             'retreat_rmse': _g('retreat_rmse'),
             'retreat_mean_bias': _g('retreat_mean_bias'),
             'retreat_trend_bias': _g('retreat_trend_bias'),
             'retreat_trend_sig_fraction_mod': _g('retreat_trend_sig_fraction_mod'),
+            'retreat_trend_sig_fraction_diff': _diff('retreat_trend_sig_fraction_mod', 'retreat_trend_sig_fraction_obs'),
             'retreat_valid_year_mean_mod': _g('retreat_valid_year_mean_mod'),
+            'retreat_valid_year_mean_diff': _diff('retreat_valid_year_mean_mod', 'retreat_valid_year_mean_obs'),
             'ice_season_mean_bias': _g('ice_season_mean_bias'),
             'ice_season_rmse': _g('ice_season_rmse'),
             'open_water_mean_bias': _g('open_water_mean_bias'),
@@ -285,6 +344,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                 stage_dir = _get_stage_dir(case_name, output_dir, hemisphere, module) / 'model_metrics'
                 stage_dir.mkdir(parents=True, exist_ok=True)
 
+                # -----------------------------------------------------------------------------
+                # Function: `_worker`.
+                # Purpose: Handle worker workflow for the current execution path.
+                # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                # -----------------------------------------------------------------------------
                 def _worker(task: Tuple[int, str]) -> Dict[str, Any]:
                     idx, mf = task
                     model_path = os.path.join(data_dir, mf)
@@ -484,20 +548,12 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
         logger.info("Generating figures ...")
         fig_dir = Path(output_dir) / module
         fig_dir.mkdir(parents=True, exist_ok=True)
-        stale_pngs = [
-            'SeaIceRegion_map_raw.png',
-            'SItrans_retreat_advance_relationship_scatter_diff.png',
-            'SItrans_model_skill_ranking_bar_diff.png',
-            'SItrans_skill_heat_map_diff.png',
-            'SItrans_IIEE_all_diff.png',
-        ]
-        for stale_name in stale_pngs:
-            stale_path = fig_dir / stale_name
-            if stale_path.exists():
-                try:
-                    stale_path.unlink()
-                except Exception:
-                    pass
+        # Remove legacy PNGs from previous naming schemes to avoid mixed HTML listing.
+        for _stale_png in fig_dir.glob('*.png'):
+            try:
+                _stale_png.unlink()
+            except Exception:
+                continue
 
         participant_labels = [obs1_plot_label]
         advance_clim_fields = [np.array(obs1_metrics_for_maps['advance_clim_obs'], dtype=float)]
@@ -555,28 +611,28 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             cmap=climatology_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
-            fig_name=str(fig_dir / 'SItrans_advance_climatology_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_clim_map_raw.png'),
         )
         pf.advance_climatology_map(
             grid_file, advance_clim_fields, participant_labels, hemisphere,
             cmap=climatology_cmap, diff_cmap=bias_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
-            fig_name=str(fig_dir / 'SItrans_advance_bias_all_models_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_bias_map_diff.png'),
         )
         pf.advance_std_map(
             grid_file, advance_std_fields, participant_labels, hemisphere,
             cmap=std_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
-            fig_name=str(fig_dir / 'SItrans_advance_std_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_dstd_map_raw.png'),
         )
         pf.advance_std_map(
             grid_file, advance_std_fields, participant_labels, hemisphere,
             cmap=std_cmap, diff_cmap=std_diff_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
-            fig_name=str(fig_dir / 'SItrans_advance_std_all_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_dstd_map_diff.png'),
         )
         pf.advance_trend_map(
             grid_file, advance_trend_fields, participant_labels, hemisphere,
@@ -584,7 +640,7 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
             sigmask_list=advance_trend_sigmasks,
-            fig_name=str(fig_dir / 'SItrans_advance_trend_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_trend_map_raw.png'),
         )
         pf.advance_trend_map(
             grid_file, advance_trend_fields, participant_labels, hemisphere,
@@ -592,35 +648,35 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
             sigmask_list=advance_trend_sigmasks,
-            fig_name=str(fig_dir / 'SItrans_advance_trend_all_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_advance_trend_map_diff.png'),
         )
         pf.retreat_climatology_map(
             grid_file, retreat_clim_fields, participant_labels, hemisphere,
             cmap=climatology_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
-            fig_name=str(fig_dir / 'SItrans_retreat_climatology_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_clim_map_raw.png'),
         )
         pf.retreat_climatology_map(
             grid_file, retreat_clim_fields, participant_labels, hemisphere,
             cmap=climatology_cmap, diff_cmap=bias_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
-            fig_name=str(fig_dir / 'SItrans_retreat_bias_all_models_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_bias_map_diff.png'),
         )
         pf.retreat_std_map(
             grid_file, retreat_std_fields, participant_labels, hemisphere,
             cmap=std_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
-            fig_name=str(fig_dir / 'SItrans_retreat_std_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_dstd_map_raw.png'),
         )
         pf.retreat_std_map(
             grid_file, retreat_std_fields, participant_labels, hemisphere,
             cmap=std_cmap, diff_cmap=std_diff_cmap,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
-            fig_name=str(fig_dir / 'SItrans_retreat_std_all_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_dstd_map_diff.png'),
         )
         pf.retreat_trend_map(
             grid_file, retreat_trend_fields, participant_labels, hemisphere,
@@ -628,7 +684,7 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='raw',
             sigmask_list=retreat_trend_sigmasks,
-            fig_name=str(fig_dir / 'SItrans_retreat_trend_all_raw.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_trend_map_raw.png'),
         )
         pf.retreat_trend_map(
             grid_file, retreat_trend_fields, participant_labels, hemisphere,
@@ -636,7 +692,7 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             n_obs=(2 if obs2_metrics is not None else 1),
             plot_mode='diff',
             sigmask_list=retreat_trend_sigmasks,
-            fig_name=str(fig_dir / 'SItrans_retreat_trend_all_diff.png'),
+            fig_name=str(fig_dir / 'sitrans_retreat_trend_map_diff.png'),
         )
 
         if model_metrics:
@@ -646,14 +702,14 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             ]
 
             skill_cols = [
-                ('advance_rmse', 'Adv RMSE'),
-                ('retreat_rmse', 'Ret RMSE'),
-                ('advance_mean_bias', 'Adv Bias'),
-                ('retreat_mean_bias', 'Ret Bias'),
-                ('advance_trend_bias', 'Adv TrendBias'),
-                ('retreat_trend_bias', 'Ret TrendBias'),
-                ('ice_season_mean_bias', 'IceSeason Bias'),
-                ('open_water_mean_bias', 'OpenWater Bias'),
+                ('advance_rmse', 'Adv RMSE[DateMap]'),
+                ('retreat_rmse', 'Ret RMSE[DateMap]'),
+                ('advance_mean_bias', 'Adv Bias[DateMap]'),
+                ('retreat_mean_bias', 'Ret Bias[DateMap]'),
+                ('advance_trend_bias', 'Adv TrendBias[DateMap]'),
+                ('retreat_trend_bias', 'Ret TrendBias[DateMap]'),
+                ('ice_season_mean_bias', 'IceSeason Bias[Duration]'),
+                ('open_water_mean_bias', 'OpenWater Bias[Duration]'),
             ]
             skill_mat = np.array([
                 [float(row.get(k, np.nan)) for k, _ in skill_cols]
@@ -661,13 +717,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             ], dtype=float) if model_scalar_rows else np.array([])
             if isinstance(skill_mat, np.ndarray) and skill_mat.size:
                 skill_keys = [k for k, _ in skill_cols]
+                _cbar_kw = _heatmap_main_cbar_kwargs(len(skill_cols), len(labels_for_models))
                 with _PLOT_LOCK:
-                    _fig, _ax = plt.subplots(
-                        figsize=(
-                            max(8, len(skill_cols) * 0.95),
-                            max(3, 1 + len(labels_for_models)) * max(0.1, heat_main_height_scale),
-                        )
-                    )
+                    _fig, _ax = plt.subplots(figsize=_heatmap_main_figsize(
+                        len(skill_cols), len(labels_for_models), heat_main_height_scale
+                    ))
                     if isinstance(obs2_metrics, dict):
                         _obs2_row = np.array(
                             [abs(float(obs2_metrics.get(k, np.nan))) for k in skill_keys],
@@ -678,12 +732,14 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                             labels_for_models,
                             [name for _, name in skill_cols],
                             ax=_ax,
-                            cbarlabel='Ratio to obs uncertainty',
+                            cbarlabel='Ratio',
                             obs_row=_obs2_row,
                             obs_row_label=obs2_plot_label,
                             ratio_vmin=heat_ratio_vmin,
                             ratio_vmax=heat_ratio_vmax,
+                            display_transform='lin2021_norm',
                             cmap=skill_heatmap_cmap,
+                            cbar_kw=_cbar_kw,
                         )
                     else:
                         pf.plot_heat_map(
@@ -691,11 +747,15 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                             labels_for_models,
                             [name for _, name in skill_cols],
                             ax=_ax,
-                            cbarlabel='Metric value',
+                            cbarlabel='Value',
                             cmap=skill_heatmap_cmap,
+                            cbar_kw=_cbar_kw,
                         )
-                    _fig.tight_layout()
-                    pf._save_fig(str(fig_dir / 'SItrans_skill_heat_map.png'), close=False)
+                    _fig.subplots_adjust(**_heatmap_main_adjust(
+                        n_models=len(labels_for_models),
+                        n_metrics=len(skill_cols),
+                    ))
+                    pf._save_fig(str(fig_dir / 'sitrans_metrics_heatmap_diff.png'), close=False)
                     plt.close(_fig)
 
         iiee_curves = []
@@ -704,6 +764,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
         obs1_adv = np.array(obs1_metrics_for_maps['advance_clim_obs'], dtype=float)
         obs1_ret = np.array(obs1_metrics_for_maps['retreat_clim_obs'], dtype=float)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_safe_slug`.
+        # Purpose: Handle safe slug workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _safe_slug(text: str, fallback: str = 'obs1') -> str:
             raw = str(text or '').strip()
             slug = ''.join(ch.lower() if ch.isalnum() else '_' for ch in raw)
@@ -711,7 +776,7 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             return slug or fallback
 
         iiee_ref_slug = _safe_slug(obs1_plot_label, fallback='obs1')
-        iiee_fig_name = f'SItrans_IIEE_all_vs_{iiee_ref_slug}_diff.png'
+        iiee_fig_name = f'sitrans_iiee_ts_vs_{iiee_ref_slug}_diff.png'
 
         if obs2_metrics is not None:
             obs2_adv = np.array(obs2_metrics['advance_clim_mod'], dtype=float)
@@ -761,9 +826,19 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
     logger.info("%s evaluation completed.", module)
 
     if model_scalar_rows:
+        # -----------------------------------------------------------------------------
+        # Function: `_fmt`.
+        # Purpose: Handle fmt workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _fmt(v, nd=3):
             return 'nan' if v is None or not np.isfinite(v) else f'{float(v):.{nd}f}'
 
+        # -----------------------------------------------------------------------------
+        # Function: `_mean_field`.
+        # Purpose: Handle mean field workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _mean_field(payload: Optional[dict], key: str) -> float:
             if not isinstance(payload, dict):
                 return np.nan
@@ -773,12 +848,22 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             vv = float(np.nanmean(arr))
             return vv if np.isfinite(vv) else np.nan
 
+        # -----------------------------------------------------------------------------
+        # Function: `_build_phase_raw_payload`.
+        # Purpose: Handle build phase raw payload workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _build_phase_raw_payload(obs1_payload: Optional[dict],
                                      obs2_payload: Optional[dict],
                                      model_payloads: List[Optional[dict]],
                                      labels: List[str],
                                      obs1_label: str,
                                      obs2_label: str) -> Dict[str, Any]:
+            # -----------------------------------------------------------------------------
+            # Function: `_phase_rows`.
+            # Purpose: Handle phase rows workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _phase_rows(phase_prefix: str) -> List[List[str]]:
                 valid_key = f'{phase_prefix}_valid_year_count'
                 sig_key = f'{phase_prefix}_trend_sigmask'
@@ -821,25 +906,116 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     ])
                 return rows
 
+            raw_metric_meta: List[Dict[str, str]] = [
+                _metric_meta(
+                    'sitrans.date.clim.mapmean.raw',
+                    'ClimMean[DateMap] Raw',
+                    long_label='Mean climatology date over grid (raw value)',
+                    scope='DateMap',
+                    stat='Mean',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.date.dstd.mapmean.raw',
+                    'DStdMean[DateMap] Raw',
+                    long_label='Mean detrended std over date map (raw value)',
+                    scope='DateMap',
+                    stat='DStd',
+                    op='Raw',
+                    std_type='detrended',
+                ),
+                _metric_meta(
+                    'sitrans.date.trend.mapmean.raw',
+                    'TrendMean[DateMap] Raw',
+                    long_label='Mean trend over date map (raw value)',
+                    scope='DateMap',
+                    stat='Trend',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.valid_years.mean.raw',
+                    'ValidYears Mean Raw',
+                    long_label='Mean valid-year count (raw value)',
+                    scope='DateMap',
+                    stat='Mean',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.trend_sig_fraction.raw',
+                    'TrendSigFrac[%] Raw',
+                    long_label='Fraction of significant trend grid cells (raw value)',
+                    scope='DateMap',
+                    stat='Fraction',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.ice_season.mean.raw',
+                    'IceSeason Mean Raw',
+                    long_label='Mean ice-season duration (raw value)',
+                    scope='Duration',
+                    stat='Mean',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.open_water.mean.raw',
+                    'OpenWater Mean Raw',
+                    long_label='Mean open-water duration (raw value)',
+                    scope='Duration',
+                    stat='Mean',
+                    op='Raw',
+                ),
+                _metric_meta(
+                    'sitrans.lag1_corr.raw',
+                    'Lag1 Corr Raw',
+                    long_label='Lag-1 correlation between retreat and next advance (raw value)',
+                    scope='TS',
+                    stat='Corr',
+                    op='Raw',
+                ),
+            ]
+
             return {
                 'type': 'phase_table',
-                'headers': [
-                    'Model/Obs Name', 'Climatology Mean', 'Std Mean', 'Trend Mean',
-                    'Valid Years', 'Trend Sig(%)', 'Ice Season Mean', 'Open Water Mean', 'Lag1 Corr',
-                ],
+                'headers': ['Model/Obs Name'] + [m['short_label'] for m in raw_metric_meta],
                 'units': ['', 'days', 'days', 'days/year', 'years', '%', 'days', 'days', '1'],
+                'metric_meta': raw_metric_meta,
                 'phases': {
                     'Advance': _phase_rows('advance'),
                     'Retreat': _phase_rows('retreat'),
                 },
             }
 
+        # -----------------------------------------------------------------------------
+        # Function: `_build_phase_diff_payload`.
+        # Purpose: Handle build phase diff payload workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _build_phase_diff_payload(obs2_pair_metrics: Optional[dict], scalar_rows: List[dict],
                                       labels: List[str], obs1_label: str, obs2_label: str) -> Dict[str, Any]:
             phase_nd = [3, 2, 2, 3, 1, 2, 2, 2, 2, 3]
 
+            # -----------------------------------------------------------------------------
+            # Function: `_fmt_phase_vals`.
+            # Purpose: Handle fmt phase vals workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _fmt_phase_vals(vals: List[float]) -> List[str]:
                 return [_fmt(vals[ii], phase_nd[ii]) for ii in range(len(phase_nd))]
+
+            # -----------------------------------------------------------------------------
+            # Function: `_pair_diff`.
+            # Purpose: Handle pair diff workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
+            def _pair_diff(payload: Dict[str, Any], mod_key: str, obs_key: str) -> float:
+                try:
+                    vm = float(payload.get(mod_key, np.nan))
+                    vo = float(payload.get(obs_key, np.nan))
+                except Exception:
+                    return np.nan
+                if not (np.isfinite(vm) and np.isfinite(vo)):
+                    return np.nan
+                return float(vm - vo)
 
             advance_rows: List[List[str]] = [[
                 f'{obs1_label} (baseline)',
@@ -874,8 +1050,14 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     obs2_pair_metrics.get('advance_rmse', np.nan),
                     obs2_pair_metrics.get('advance_mean_bias', np.nan),
                     obs2_pair_metrics.get('advance_trend_bias', np.nan),
-                    obs2_pair_metrics.get('advance_trend_sig_fraction_mod', np.nan),
-                    obs2_pair_metrics.get('advance_valid_year_mean_mod', np.nan),
+                    obs2_pair_metrics.get(
+                        'advance_trend_sig_fraction_diff',
+                        _pair_diff(obs2_pair_metrics, 'advance_trend_sig_fraction_mod', 'advance_trend_sig_fraction_obs'),
+                    ),
+                    obs2_pair_metrics.get(
+                        'advance_valid_year_mean_diff',
+                        _pair_diff(obs2_pair_metrics, 'advance_valid_year_mean_mod', 'advance_valid_year_mean_obs'),
+                    ),
                     obs2_pair_metrics.get('ice_season_mean_bias', np.nan),
                     obs2_pair_metrics.get('open_water_mean_bias', np.nan),
                     obs2_pair_metrics.get('ice_season_rmse', np.nan),
@@ -886,8 +1068,14 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     obs2_pair_metrics.get('retreat_rmse', np.nan),
                     obs2_pair_metrics.get('retreat_mean_bias', np.nan),
                     obs2_pair_metrics.get('retreat_trend_bias', np.nan),
-                    obs2_pair_metrics.get('retreat_trend_sig_fraction_mod', np.nan),
-                    obs2_pair_metrics.get('retreat_valid_year_mean_mod', np.nan),
+                    obs2_pair_metrics.get(
+                        'retreat_trend_sig_fraction_diff',
+                        _pair_diff(obs2_pair_metrics, 'retreat_trend_sig_fraction_mod', 'retreat_trend_sig_fraction_obs'),
+                    ),
+                    obs2_pair_metrics.get(
+                        'retreat_valid_year_mean_diff',
+                        _pair_diff(obs2_pair_metrics, 'retreat_valid_year_mean_mod', 'retreat_valid_year_mean_obs'),
+                    ),
                     obs2_pair_metrics.get('ice_season_mean_bias', np.nan),
                     obs2_pair_metrics.get('open_water_mean_bias', np.nan),
                     obs2_pair_metrics.get('open_water_rmse', np.nan),
@@ -895,11 +1083,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                 ]
                 advance_rows.append([
                     str(obs2_label),
-                    *_fmt_phase_vals([_obs2_identity_ratio(vv) for vv in obs2_adv_vals]),
+                    *_fmt_phase_vals(obs2_adv_vals),
                 ])
                 retreat_rows.append([
                     str(obs2_label),
-                    *_fmt_phase_vals([_obs2_identity_ratio(vv) for vv in obs2_ret_vals]),
+                    *_fmt_phase_vals(obs2_ret_vals),
                 ])
 
             for ii, row in enumerate(scalar_rows):
@@ -909,8 +1097,8 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     row.get('advance_rmse', np.nan),
                     row.get('advance_mean_bias', np.nan),
                     row.get('advance_trend_bias', np.nan),
-                    row.get('advance_trend_sig_fraction_mod', np.nan),
-                    row.get('advance_valid_year_mean_mod', np.nan),
+                    row.get('advance_trend_sig_fraction_diff', np.nan),
+                    row.get('advance_valid_year_mean_diff', np.nan),
                     row.get('ice_season_mean_bias', np.nan),
                     row.get('open_water_mean_bias', np.nan),
                     row.get('ice_season_rmse', np.nan),
@@ -921,17 +1109,13 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     row.get('retreat_rmse', np.nan),
                     row.get('retreat_mean_bias', np.nan),
                     row.get('retreat_trend_bias', np.nan),
-                    row.get('retreat_trend_sig_fraction_mod', np.nan),
-                    row.get('retreat_valid_year_mean_mod', np.nan),
+                    row.get('retreat_trend_sig_fraction_diff', np.nan),
+                    row.get('retreat_valid_year_mean_diff', np.nan),
                     row.get('ice_season_mean_bias', np.nan),
                     row.get('open_water_mean_bias', np.nan),
                     row.get('open_water_rmse', np.nan),
                     row.get('retreat_to_next_advance_corr_bias', np.nan),
                 ]
-                if obs2_adv_vals is not None:
-                    adv_vals = [_calc_obs2_ratio(v, b) for v, b in zip(adv_vals, obs2_adv_vals)]
-                if obs2_ret_vals is not None:
-                    ret_vals = [_calc_obs2_ratio(v, b) for v, b in zip(ret_vals, obs2_ret_vals)]
                 advance_rows.append([
                     label,
                     *_fmt_phase_vals(adv_vals),
@@ -941,14 +1125,94 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     *_fmt_phase_vals(ret_vals),
                 ])
 
+            diff_metric_meta: List[Dict[str, str]] = [
+                _metric_meta(
+                    'sitrans.date.corr.skill',
+                    'Corr[DateMap] Skill',
+                    long_label='Correlation skill on date maps',
+                    scope='DateMap',
+                    stat='Corr',
+                    op='Skill',
+                ),
+                _metric_meta(
+                    'sitrans.date.rmse.skill',
+                    'RMSE[DateMap] Skill',
+                    long_label='RMSE skill on date maps',
+                    scope='DateMap',
+                    stat='RMSE',
+                    op='Skill',
+                ),
+                _metric_meta(
+                    'sitrans.date.mean.bias',
+                    'Mean Bias[DateMap]',
+                    long_label='Mean bias on date maps (model - obs)',
+                    scope='DateMap',
+                    stat='Mean',
+                    op='Bias',
+                ),
+                _metric_meta(
+                    'sitrans.date.trend.bias',
+                    'Trend Bias[DateMap]',
+                    long_label='Trend bias on date maps (model - obs)',
+                    scope='DateMap',
+                    stat='Trend',
+                    op='Bias',
+                ),
+                _metric_meta(
+                    'sitrans.trend_sig_fraction.diff',
+                    'TrendSigFrac Diff[%]',
+                    long_label='Difference in significant-trend fraction',
+                    scope='DateMap',
+                    stat='Fraction',
+                    op='Diff',
+                ),
+                _metric_meta(
+                    'sitrans.valid_years.diff',
+                    'ValidYears Diff',
+                    long_label='Difference in valid-year counts',
+                    scope='DateMap',
+                    stat='Mean',
+                    op='Diff',
+                ),
+                _metric_meta(
+                    'sitrans.ice_season.bias',
+                    'IceSeason Bias[Duration]',
+                    long_label='Ice-season duration bias (model - obs)',
+                    scope='Duration',
+                    stat='Mean',
+                    op='Bias',
+                ),
+                _metric_meta(
+                    'sitrans.open_water.bias',
+                    'OpenWater Bias[Duration]',
+                    long_label='Open-water duration bias (model - obs)',
+                    scope='Duration',
+                    stat='Mean',
+                    op='Bias',
+                ),
+                _metric_meta(
+                    'sitrans.duration.rmse.skill',
+                    'Duration RMSE[TS] Skill',
+                    long_label='Duration RMSE skill',
+                    scope='Duration',
+                    stat='RMSE',
+                    op='Skill',
+                ),
+                _metric_meta(
+                    'sitrans.lag1_corr.bias',
+                    'Lag1 Corr Bias[TS]',
+                    long_label='Lag-1 correlation bias (model - obs)',
+                    scope='TS',
+                    stat='Corr',
+                    op='Bias',
+                ),
+            ]
+
             return {
                 'type': 'phase_table',
-                'headers': [
-                    'Model/Obs Name', 'Correlation', 'RMSE', 'Mean Bias', 'Trend Bias',
-                    'Trend Sig(%)', 'Valid Years', 'Ice Season Bias', 'Open Water Bias',
-                    'Duration RMSE', 'Lag1 Corr Bias',
-                ],
+                'headers': ['Model/Obs Name'] + [m['short_label'] for m in diff_metric_meta],
                 'units': ['', '1', 'days', 'days', 'days/year', '%', 'years', 'days', 'days', 'days', '1'],
+                'metric_meta': diff_metric_meta,
                 'phases': {
                     'Advance': advance_rows,
                     'Retreat': retreat_rows,
@@ -1024,6 +1288,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
             region_timeseries_payloads_base: List[Dict[str, Any]] = []
             region_timeseries_payloads_group: List[Dict[str, Any]] = []
 
+            # -----------------------------------------------------------------------------
+            # Function: `_align_model_labels`.
+            # Purpose: Handle align model labels workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _align_model_labels(labels_in: List[str], n_models: int) -> List[str]:
                 labels_out = list(labels_in or [])
                 if len(labels_out) < int(n_models):
@@ -1031,6 +1300,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                         labels_out.append(f'{module}_dataset_{idx + 1}')
                 return labels_out[:int(n_models)]
 
+            # -----------------------------------------------------------------------------
+            # Function: `_extract_spread_series`.
+            # Purpose: Handle extract spread series workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _extract_spread_series(spread_payload: Any, key: str) -> np.ndarray:
                 if not isinstance(spread_payload, dict):
                     return np.array([], dtype=float)
@@ -1088,6 +1362,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
 
             years_ref = np.array(all_source.get('year', np.array([])), dtype=float) if all_source is not None else np.array([])
 
+            # -----------------------------------------------------------------------------
+            # Function: `_new_sitr_metrics_region`.
+            # Purpose: Handle new sitr metrics region workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _new_sitr_metrics_region() -> SIM.SItransMetrics:
                 return SIM.SItransMetrics(
                     grid_file=grid_file, date_sta=date_start, date_end=date_end,
@@ -1098,6 +1377,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                     trend_sig_p=sitrans_trend_sig_p,
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_compute_sector_outputs`.
+            # Purpose: Handle compute sector outputs workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _compute_sector_outputs(
                 metric_engine: SIM.SItransMetrics,
                 sector_key: str,
@@ -1237,6 +1521,11 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                 }
                 return ts_payload_base, ts_payload_group, table_payload
 
+            # -----------------------------------------------------------------------------
+            # Function: `_build_empty_sector_outputs`.
+            # Purpose: Handle build empty sector outputs workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _build_empty_sector_outputs(
                 sector_key: str,
             ) -> Tuple[Dict[str, Any], Optional[Dict[str, Any]], Dict[str, Any]]:
@@ -1344,26 +1633,26 @@ def eval_sitrans(case_name: str, recipe: RR.RecipeReader,
                         region_timeseries_payloads_base,
                         phase='advance',
                         hms=hemisphere,
-                        fig_name=str(fig_dir / 'SItrans_advance_region_timeseries_raw.png'),
+                        fig_name=str(fig_dir / 'sitrans_advance_region_ts_raw.png'),
                     )
                     pf.plot_sitrans_region_timeseries(
                         region_timeseries_payloads_base,
                         phase='retreat',
                         hms=hemisphere,
-                        fig_name=str(fig_dir / 'SItrans_retreat_region_timeseries_raw.png'),
+                        fig_name=str(fig_dir / 'sitrans_retreat_region_ts_raw.png'),
                     )
                     if region_timeseries_payloads_group:
                         pf.plot_sitrans_region_timeseries(
                             region_timeseries_payloads_group,
                             phase='advance',
                             hms=hemisphere,
-                            fig_name=str(fig_dir / 'SItrans_advance_region_timeseries_raw_groupmean.png'),
+                            fig_name=str(fig_dir / 'sitrans_advance_region_ts_groupmean_raw.png'),
                         )
                         pf.plot_sitrans_region_timeseries(
                             region_timeseries_payloads_group,
                             phase='retreat',
                             hms=hemisphere,
-                            fig_name=str(fig_dir / 'SItrans_retreat_region_timeseries_raw_groupmean.png'),
+                            fig_name=str(fig_dir / 'sitrans_retreat_region_ts_groupmean_raw.png'),
                         )
                 except Exception as exc:
                     logger.warning("Failed to generate regional SItrans time-series figures (%s).", exc)

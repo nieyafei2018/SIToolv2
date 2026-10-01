@@ -34,6 +34,7 @@ variables:
       - CMCC-ESM2
       - MRI-ESM2-0
       - NorESM2-MM
+    model_mean_groups:
 
   ##################
   #     SIconc     #

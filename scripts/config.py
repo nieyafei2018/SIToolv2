@@ -29,6 +29,11 @@ MONTH_TICKS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan']
 
 
+# -----------------------------------------------------------------------------
+# Function: `setup_logging`.
+# Purpose: Handle setup logging workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def setup_logging(level: int = logging.INFO, log_file: str = None) -> None:
     """Configure root logger to write to console and optionally a log file.
 

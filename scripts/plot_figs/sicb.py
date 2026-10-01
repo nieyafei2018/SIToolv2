@@ -7,7 +7,65 @@ from scipy import ndimage
 # Reuse shared plotting namespace and helpers from core module.
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
+# -----------------------------------------------------------------------------
+# Function: `_axes_span_in_figure`.
+# Purpose: Handle axes span in figure workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _axes_span_in_figure(axes):
+    axes_list = [ax for ax in np.ravel(np.asarray(axes)).tolist() if ax is not None]
+    if not axes_list:
+        return 0.10, 0.90, 0.10
+    boxes = [ax.get_position() for ax in axes_list]
+    x0 = float(min(bb.x0 for bb in boxes))
+    x1 = float(max(bb.x1 for bb in boxes))
+    y0 = float(min(bb.y0 for bb in boxes))
+    return x0, x1, y0
 
+
+# -----------------------------------------------------------------------------
+# Function: `_legend_ncol_by_width`.
+# Purpose: Handle legend ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
+    n_items = max(1, len(labels))
+    fs = float(fontsize)
+    fig_width_px = max(1.0, float(fig.get_figwidth()) * float(fig.dpi) * max(0.10, float(width_frac)))
+    widest_chars = max(6, max((len(str(lb)) for lb in labels), default=6))
+    char_px = fs * float(fig.dpi) / 72.0 * 0.60
+    item_px = max(70.0, char_px * (widest_chars + 8.0))
+    max_fit = max(1, int(fig_width_px // item_px))
+    max_rows = max(1, int(target_rows))
+
+    for rows in range(1, max_rows + 1):
+        ncol = int(math.ceil(n_items / float(rows)))
+        if ncol <= max_fit:
+            return max(1, min(n_items, ncol))
+
+    return max(1, min(n_items, max_fit))
+
+
+# -----------------------------------------------------------------------------
+# Function: `_place_adaptive_bottom_legend`.
+# Purpose: Handle place adaptive bottom legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _place_adaptive_bottom_legend(fig, axes, handles, labels, *,
+                                  target_rows=3, fontsize=None, y_gap=0.040):
+    return _place_unified_line_legend(
+        fig,
+        axes,
+        handles,
+        labels,
+    )
+
+
+# -----------------------------------------------------------------------------
+# Function: `_seasonal_ridging_mask`.
+# Purpose: Handle seasonal ridging mask workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _seasonal_ridging_mask(ds: xr.Dataset, season_idx: int) -> Optional[np.ndarray]:
     """Return seasonal ridging mask (0/1) for one season index."""
     if 'ridging_mask' in ds:
@@ -29,6 +87,11 @@ def _seasonal_ridging_mask(ds: xr.Dataset, season_idx: int) -> Optional[np.ndarr
     return None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_lon_lat`.
+# Purpose: Handle resolve lon lat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_lon_lat(
     ds: xr.Dataset,
     fallback: Optional[tuple[np.ndarray, np.ndarray]] = None,
@@ -59,6 +122,11 @@ def _resolve_lon_lat(
     return np.asarray(lon_da, dtype=float), np.asarray(lat_da, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_plot_ridging_contour`.
+# Purpose: Handle plot ridging contour workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plot_ridging_contour(ax, lon, lat, ridging_mask,
                           contour_color: str = 'k', contour_lw: float = 0.8) -> None:
     """Overlay ridging-region contour on one map axes."""
@@ -145,6 +213,11 @@ def _plot_ridging_contour(ax, lon, lat, ridging_mask,
         return
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sicb_monthly_term_series`.
+# Purpose: Handle sicb monthly term series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sicb_monthly_term_series(mon_file: str, term: str) -> Optional[np.ndarray]:
     """Return 13-point monthly cycle for one SICB term."""
     try:
@@ -162,6 +235,11 @@ def _sicb_monthly_term_series(mon_file: str, term: str) -> Optional[np.ndarray]:
         return None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_sicb_ridging_monthly_series`.
+# Purpose: Handle sicb ridging monthly series workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _sicb_ridging_monthly_series(daily_file: str) -> tuple[np.ndarray, np.ndarray]:
     """Return monthly ridging-ratio time series as (x_datetime, y)."""
     with _open_nc_ref(daily_file) as ds:
@@ -193,6 +271,11 @@ def _sicb_ridging_monthly_series(daily_file: str) -> tuple[np.ndarray, np.ndarra
         return np.asarray(monthly.index.to_pydatetime()), np.asarray(monthly.values, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SICB`.
+# Purpose: Handle plot SICB workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SICB(filenm, hms,
               budget_term_str=None,
               unit=r'$\mathrm{\mathbf{\%/season}}$',
@@ -283,6 +366,11 @@ def plot_SICB(filenm, hms,
 
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SICB_ts`.
+# Purpose: Handle plot SICB ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SICB_ts(mon_clim_files, labels, hms, fig_name=None,
                  line_style=None, color=None, n_obs=None,
                  group_member_files=None):
@@ -369,35 +457,28 @@ def plot_SICB_ts(mon_clim_files, labels, hms, fig_name=None,
         ax[jj].set_xlim([-0.25, 12.25])
 
     # Shared legend below all subplots to avoid overlapping data lines
-    _finalize_line_layout(fig, legend_location='bottom', pad=0.86)
+    _finalize_line_layout(fig, legend_location='none', pad=0.86)
     fig.subplots_adjust(
         hspace=_line_subplot_hspace(0.34),
         wspace=_line_subplot_wspace(0.30),
-        bottom=_line_bottom_margin(0.16),
     )
 
     handles, labels_leg = ax[0].get_legend_handles_labels()
     if handles:
-        positions = [aa.get_position() for aa in ax]
-        x0 = min(pos.x0 for pos in positions)
-        x1 = max(pos.x1 for pos in positions)
-        legend_width = max(0.15, x1 - x0)
-        fig.legend(
-            handles, labels_leg,
-            loc='lower left',
-            bbox_to_anchor=(x0, _line_bottom_legend_y(0.035), legend_width, 0.05),
-            bbox_transform=fig.transFigure,
-            mode='expand',
-            ncol=max(1, min(5, len(labels_leg))),
-            fontsize=_FS_LEGEND,
-            frameon=True,
-            borderaxespad=0.0,
-            columnspacing=1.0,
-            handlelength=2.0,
+        _place_adaptive_bottom_legend(
+            fig, ax, handles, labels_leg,
+            target_rows=3,
+            fontsize=max(9, _FS_LEGEND - 1),
+            y_gap=0.046,
         )
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SICB_ridging_ts`.
+# Purpose: Handle plot SICB ridging ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SICB_ridging_ts(daily_files, labels, hms, fig_name=None,
                          line_style=None, color=None, n_obs=None,
                          group_member_files=None):
@@ -420,6 +501,11 @@ def plot_SICB_ridging_ts(daily_files, labels, hms, fig_name=None,
     fig, ax = plt.subplots(1, 1, figsize=_line_figsize(12, 4.4))
     ax.axhline(0, **_line_zero_style(alpha=0.5))
 
+    # -----------------------------------------------------------------------------
+    # Function: `_collect_member_series`.
+    # Purpose: Handle collect member series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _collect_member_series(member_paths):
         """Load ridging monthly series from group member daily files."""
         out = []
@@ -436,6 +522,11 @@ def plot_SICB_ridging_ts(daily_files, labels, hms, fig_name=None,
             out.append((pd.to_datetime(np.asarray(x_m).reshape(-1)), y_arr))
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_align_member_series`.
+    # Purpose: Handle align member series workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _align_member_series(member_series, target_x=None):
         """Align member series to one monthly axis and return mean/std-ready array."""
         if not member_series:
@@ -545,7 +636,7 @@ def plot_SICB_ridging_ts(daily_files, labels, hms, fig_name=None,
     _apply_light_grid(ax)
     ax.tick_params(axis='x', labelsize=_FS_TICK, rotation=20)
     ax.tick_params(axis='y', labelsize=_FS_TICK)
-    _finalize_line_layout(fig, legend_location='bottom', pad=0.92)
+    _finalize_line_layout(fig, legend_location='none', pad=0.92)
     if legend_handles:
         dedup_handles = []
         dedup_labels = []
@@ -558,17 +649,20 @@ def plot_SICB_ridging_ts(daily_files, labels, hms, fig_name=None,
             dedup_handles.append(hh)
             dedup_labels.append(key)
 
-        ax_pos = ax.get_position()
-        legend_center_x = 0.5 * (ax_pos.x0 + ax_pos.x1)
-        fig.legend(
-            dedup_handles, dedup_labels,
-            loc='lower center', bbox_to_anchor=(legend_center_x, _line_bottom_legend_y(-0.01)),
-            ncol=max(1, min(5, len(dedup_labels))),
-            fontsize=_FS_LEGEND, frameon=True,
+        _place_adaptive_bottom_legend(
+            fig, [ax], dedup_handles, dedup_labels,
+            target_rows=3,
+            fontsize=max(9, _FS_LEGEND - 1),
+            y_gap=0.046,
         )
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SICB2`.
+# Purpose: Handle plot SICB2 workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SICB2(file_list, model_labels, hms, unit=r'$\mathrm{\%/season}$',
                vmin=-100, vmax=100, cbtick_bin=20, cm='RdBu_r', fig_label=None,
                overlay_ridging=True, ridging_contour_color='k'):
@@ -584,7 +678,6 @@ def plot_SICB2(file_list, model_labels, hms, unit=r'$\mathrm{\%/season}$',
         ss_str = ['Winter (DJF)', 'Spring (MAM)', 'Summer (JJA)', 'Autumn (SON)']
 
     budget_term_str = ['dadt', 'adv', 'div', 'res']
-    cbtick = np.arange(vmin, vmax + 1, cbtick_bin)
 
     ref_lon = None
     ref_lat = None

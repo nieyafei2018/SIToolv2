@@ -10,6 +10,11 @@ globals().update({k: v for k, v in _base.__dict__.items() if k not in globals()}
 class EvalGridMixin:
     """Mixin with grouped preprocessing methods."""
 
+    # -----------------------------------------------------------------------------
+    # Function: `gen_eval_grid`.
+    # Purpose: Handle gen eval grid workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def gen_eval_grid(self, ocean_mask: bool = True, region_mask: bool = True) -> str:
         """Generate the evaluation grid based on recipe specifications.
 
@@ -59,6 +64,11 @@ class EvalGridMixin:
             )
         return grid_file
 
+    # -----------------------------------------------------------------------------
+    # Function: `_prepare_common`.
+    # Purpose: Handle prepare common workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _prepare_common(self, frequency: str, output_dir: str):
         """Common setup steps shared by prep_obs and prep_models.
 

@@ -101,6 +101,11 @@ def ql_SIdrift_clim(data_file, prod_name, period, hms, kk, output_folder='./RefD
         shutil.rmtree(temp_folder, ignore_errors=True)
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SIdrift_trend`.
+# Purpose: Handle ql SIdrift trend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SIdrift_trend(data_file, prod_name, period, hms, output_folder='./RefData_QuickLook/'):
     """Plot sea ice drift speed trend map.
 
@@ -237,6 +242,11 @@ def ql_SNdepth_clim_sh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     plt.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SNdepth_sh`.
+# Purpose: Handle ql SNdepth sh workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SNdepth_sh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     """Plot SH snow depth time series and seasonal cycle (CTOH and MPMR).
 
@@ -265,7 +275,7 @@ def ql_SNdepth_sh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     sd_CTOH_clim = sd_CTOH_ts.groupby('time.month').mean(skipna=True)
     sd_CTOH_anom = sd_CTOH_ts.groupby('time.month') - sd_CTOH_clim
 
-    fig, ax = plt.subplots(3, 1, figsize=(12, 10))
+    _, ax = plt.subplots(3, 1, figsize=(12, 10))
     ax[0].plot(time_MPMR.values, sd_MPMR_ts, 'k-', label='MPMR')
     ax[0].plot(time_CTOH.values, sd_CTOH_ts, 'b-', label='CTOH')
     ax[0].set_ylabel('Mean value (m)')
@@ -284,6 +294,11 @@ def ql_SNdepth_sh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     plt.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SNdepth_clim_nh`.
+# Purpose: Handle ql SNdepth clim nh workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SNdepth_clim_nh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     """Plot NH snow depth seasonal climatology (CTOH and SnowModel-LG).
 
@@ -347,6 +362,11 @@ def ql_SNdepth_clim_nh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
         shutil.rmtree(temp_folder, ignore_errors=True)
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SNdepth_nh`.
+# Purpose: Handle ql SNdepth nh workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SNdepth_nh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     """Plot NH snow depth time series and seasonal cycle.
 
@@ -400,7 +420,7 @@ def ql_SNdepth_nh(sndepth_ref_dir, output_folder='./RefData_QuickLook/'):
     sd_LG_M2_clim = sd_LG_M2_ts.groupby('time.month').mean(skipna=True)
     sd_LG_M2_anom = sd_LG_M2_ts.groupby('time.month') - sd_LG_M2_clim
 
-    fig, ax = plt.subplots(3, 1, figsize=(12, 10))
+    _, ax = plt.subplots(3, 1, figsize=(12, 10))
     ax[0].plot(full_time, sd_CTOH_ts, 'b-')
     ax[0].plot(full_time_LG, sd_LG_E5_ts, 'r-')
     ax[0].plot(full_time_LG, sd_LG_M2_ts, 'm-')
@@ -478,6 +498,11 @@ def ql_SIthick_clim_sh(sithick_ref_dir, output_folder='./RefData_QuickLook/'):
     plt.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SIthick_sh`.
+# Purpose: Handle ql SIthick sh workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SIthick_sh(sithick_ref_dir, output_folder='./RefData_QuickLook/'):
     """Plot SH sea ice thickness time series and seasonal cycle.
 
@@ -506,7 +531,7 @@ def ql_SIthick_sh(sithick_ref_dir, output_folder='./RefData_QuickLook/'):
     sit_CTOH_clim = sit_CTOH_ts.groupby('time.month').mean(skipna=True)
     sit_CTOH_anom = sit_CTOH_ts.groupby('time.month') - sit_CTOH_clim
 
-    fig, ax = plt.subplots(3, 1, figsize=(12, 10))
+    _, ax = plt.subplots(3, 1, figsize=(12, 10))
     ax[0].plot(time_GIOMAS.values, sit_GIOMAS_ts, 'k-', label='GIOMAS')
     ax[0].plot(time_CTOH.values, sit_CTOH_ts, 'b-', label='CTOH')
     ax[0].set_ylabel('Mean value (m)')
@@ -525,6 +550,11 @@ def ql_SIthick_sh(sithick_ref_dir, output_folder='./RefData_QuickLook/'):
     plt.close()
 
 
+# -----------------------------------------------------------------------------
+# Function: `ql_SIthick_clim_nh`.
+# Purpose: Handle ql SIthick clim nh workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ql_SIthick_clim_nh(sithick_ref_dir, output_folder='./RefData_QuickLook/'):
     """Plot NH sea ice thickness seasonal climatology (CTOH, PIOMAS, CSBD, TOPAZ).
 

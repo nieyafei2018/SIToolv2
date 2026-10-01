@@ -10,6 +10,11 @@ globals().update({k: v for k, v in _base.__dict__.items() if k not in globals()}
 class SidriftPrepMixin:
     """Mixin with grouped preprocessing methods."""
 
+    # -----------------------------------------------------------------------------
+    # Function: `_load_angle_field`.
+    # Purpose: Handle load angle field workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _load_angle_field(self, angle_spec: Any, spatial_shape: Tuple[int, ...]) -> Tuple[Optional[np.ndarray], str]:
         """Load optional model angle field from a recipe entry.
 
@@ -76,6 +81,11 @@ class SidriftPrepMixin:
                 return theta, 'loaded_degree'
             return theta, f'loaded_{unit}'
 
+    # -----------------------------------------------------------------------------
+    # Function: `prep_sidrift_models`.
+    # Purpose: Handle prep sidrift models workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def prep_sidrift_models(
         self,
         u_file_groups: List[List[str]],
@@ -148,6 +158,11 @@ class SidriftPrepMixin:
                 safe_jobs = min(safe_jobs, max_parallel)
         model_workers, segment_workers = _plan_nested_workers(safe_jobs, len(u_file_groups))
 
+        # -----------------------------------------------------------------------------
+        # Function: `_resolve_output_names`.
+        # Purpose: Handle resolve output names workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _resolve_output_names(midx: int, u_group: List[str], v_group: List[str]) -> Tuple[str, str, str, str, str]:
             model_name = os.path.basename(os.path.dirname(u_group[0])) or f'model_{midx + 1}'
             u_base = re.sub(r'_\d{6,8}-\d{6,8}$', '', os.path.splitext(os.path.basename(u_group[-1]))[0])
@@ -172,6 +187,11 @@ class SidriftPrepMixin:
                     )
                 name_registry[fname] = midx
 
+        # -----------------------------------------------------------------------------
+        # Function: `_process_one_model`.
+        # Purpose: Handle process one model workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _process_one_model(task: Tuple[int, List[str], List[str]]) -> Dict[str, Any]:
             midx, u_group, v_group = task
             if not u_group or not v_group:
@@ -184,15 +204,9 @@ class SidriftPrepMixin:
             model_name, out_u_name, out_v_name, out_u_path, out_v_path = _resolve_output_names(midx, u_group, v_group)
             logger.info("  Model %d: %s", midx + 1, model_name)
 
-            lock_ctx = _acquire_path_locks([out_u_path, out_v_path])
-            lock_ctx.__enter__()
             try:
-                if os.path.exists(out_u_path) and os.path.exists(out_v_path):
-                    if overwrite:
-                        logger.info("    Overwriting existing processed files for %s", model_name)
-                        os.remove(out_u_path)
-                        os.remove(out_v_path)
-                    else:
+                if (not overwrite) and os.path.exists(out_u_path) and os.path.exists(out_v_path):
+                    if self._is_nonempty_time_file(out_u_path) and self._is_nonempty_time_file(out_v_path):
                         return {
                             'model_index': midx,
                             'model_name': model_name,
@@ -200,6 +214,98 @@ class SidriftPrepMixin:
                             'out_u_name': out_u_name,
                             'out_v_name': out_v_name,
                         }
+                    logger.warning(
+                        "    Existing SIdrift outputs have empty time axis; rebuilding: %s",
+                        model_name,
+                    )
+
+                if os.path.exists(out_u_path) and os.path.exists(out_v_path):
+                    if overwrite:
+                        logger.info(
+                            "    Existing processed files will be overwritten after staged build for %s",
+                            model_name,
+                        )
+                    else:
+                        if self._is_nonempty_time_file(out_u_path) and self._is_nonempty_time_file(out_v_path):
+                            return {
+                                'model_index': midx,
+                                'model_name': model_name,
+                                'status': 'cached',
+                                'out_u_name': out_u_name,
+                                'out_v_name': out_v_name,
+                            }
+                        logger.warning(
+                            "    Existing SIdrift outputs have empty time axis; rebuilding: %s",
+                            model_name,
+                        )
+
+                # Fix-B (P10): large single-file year splitting for SIdrift.
+                # Models like AWI-CM-1-1-HR ship a single 10-year daily file (~3650 steps).
+                # Splitting into annual pseudo-segments enables parallel monmean + remap,
+                # cutting wall time by ~4×. Controlled by SITOOL_PREP_SPLIT_LARGE_FILE
+                # (default: auto=enabled) and SITOOL_PREP_SPLIT_YEAR_THRESH (default: 730).
+                _split_enabled_raw = str(
+                    os.environ.get('SITOOL_PREP_SPLIT_LARGE_FILE', 'auto')
+                ).strip().lower()
+                _split_enabled = _split_enabled_raw not in {'0', 'false', 'no', 'off'}
+                try:
+                    _split_thresh = int(os.environ.get('SITOOL_PREP_SPLIT_YEAR_THRESH', '730'))
+                except Exception:
+                    _split_thresh = 730
+
+                if _split_enabled and len(u_group) == 1 and len(v_group) == 1:
+                    _u_tsteps = self._dataset_time_size(u_group[0])
+                    if _u_tsteps is not None and _u_tsteps > _split_thresh:
+                        _eval_start_yr = int(str(start_date)[:4])
+                        _eval_end_yr   = int(str(end_date)[:4])
+                        _split_tmp = os.path.join(
+                            self.temp_root, f'sid_split_{midx}_{os.getpid()}'
+                        )
+                        os.makedirs(_split_tmp, exist_ok=True)
+                        _split_cdo = self._new_cdo_instance()
+                        _split_u: List[str] = []
+                        _split_v: List[str] = []
+                        _split_ok = True
+                        logger.info(
+                            "    sidrift %s: splitting large single file (%d steps) "
+                            "into annual segments (years %d–%d).",
+                            model_name, _u_tsteps, _eval_start_yr, _eval_end_yr,
+                        )
+                        for _yr in range(_eval_start_yr, _eval_end_yr + 1):
+                            _u_base = os.path.splitext(os.path.basename(u_group[0]))[0]
+                            _v_base = os.path.splitext(os.path.basename(v_group[0]))[0]
+                            _u_yr = os.path.join(_split_tmp, f'{_u_base}_yr{_yr}.nc')
+                            _v_yr = os.path.join(_split_tmp, f'{_v_base}_yr{_yr}.nc')
+                            try:
+                                _split_cdo.selyear(str(_yr), input=os.path.abspath(u_group[0]), output=_u_yr)
+                                _split_cdo.selyear(str(_yr), input=os.path.abspath(v_group[0]), output=_v_yr)
+                                if (os.path.exists(_u_yr) and os.path.getsize(_u_yr) > 0
+                                        and os.path.exists(_v_yr) and os.path.getsize(_v_yr) > 0):
+                                    _split_u.append(_u_yr)
+                                    _split_v.append(_v_yr)
+                                else:
+                                    logger.warning(
+                                        "    sidrift %s: selyear(%d) produced empty output; abandoning split.",
+                                        model_name, _yr,
+                                    )
+                                    _split_ok = False
+                                    break
+                            except Exception as _se:
+                                logger.warning(
+                                    "    sidrift %s: selyear(%d) failed (%s); abandoning split.",
+                                    model_name, _yr, _se,
+                                )
+                                _split_ok = False
+                                break
+                        if _split_ok and _split_u and _split_v:
+                            logger.info(
+                                "    sidrift %s: split into %d annual u/v pairs.",
+                                model_name, len(_split_u),
+                            )
+                            u_group = _split_u
+                            v_group = _split_v
+
+                req_dir = model_direction[midx] if midx < len(model_direction) else 'auto'
 
                 seg_pairs = self._pair_model_segments(u_group, v_group)
                 if not seg_pairs:
@@ -209,8 +315,6 @@ class SidriftPrepMixin:
                         'model_name': model_name,
                         'status': 'skipped_no_pair',
                     }
-
-                req_dir = model_direction[midx] if midx < len(model_direction) else 'auto'
                 angle_spec = model_angle[midx] if midx < len(model_angle) else None
                 infer_set = set()
                 eff_set = set()
@@ -223,6 +327,11 @@ class SidriftPrepMixin:
                     u_chunks: List[str] = []
                     v_chunks: List[str] = []
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_process_one_segment`.
+                    # Purpose: Handle process one segment workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _process_one_segment(seg_task: Tuple[int, str, str]) -> Dict[str, Any]:
                         sidx, u_in, v_in = seg_task
                         logger.info("    Segment %d: %s | %s", sidx + 1, os.path.basename(u_in), os.path.basename(v_in))
@@ -321,8 +430,17 @@ class SidriftPrepMixin:
 
                         u_interp = os.path.join(seg_dir, 'u_interp.nc')
                         v_interp = os.path.join(seg_dir, 'v_interp.nc')
-                        utils.stable_interpolation(grid_txt, u_en, u_interp, worker_cdo)
-                        utils.stable_interpolation(grid_txt, v_en, v_interp, worker_cdo)
+                        # P8 (sidrift) — reuse pre-computed weight file when available.
+                        # _sidrift_weight_file is built once before the segment loop starts
+                        # (see below) and is None when weight caching is disabled or failed.
+                        utils.stable_interpolation(
+                            grid_txt, u_en, u_interp, worker_cdo,
+                            weight_file=_sidrift_weight_file,
+                        )
+                        utils.stable_interpolation(
+                            grid_txt, v_en, v_interp, worker_cdo,
+                            weight_file=_sidrift_weight_file,
+                        )
 
                         u_xy = os.path.join(seg_dir, 'u_xy.nc')
                         v_xy = os.path.join(seg_dir, 'v_xy.nc')
@@ -360,6 +478,32 @@ class SidriftPrepMixin:
                             'source_rotation': src_rot,
                             'metadata_override': bool(override_flag),
                         }
+
+                    # P8 (sidrift) — pre-compute remap weight file once per model
+                    # before the segment loop.  All segments share the same source
+                    # grid so a single weight file covers every (sidx, u_in, v_in).
+                    # The variable is accessed by closure inside _process_one_segment.
+                    _sidrift_weight_file: Optional[str] = None
+                    if seg_pairs:
+                        _first_u = next((u for u, _ in seg_pairs if os.path.exists(u)), None)
+                        if _first_u:
+                            _sd_weight_dir = os.path.join(self.temp_root, 'remap_weight_cache')
+                            _sd_probe_cdo = self._new_cdo_instance()
+                            _sidrift_weight_file = utils.build_remap_weights(
+                                grid_file=grid_txt,
+                                source_file=_first_u,
+                                weight_dir=_sd_weight_dir,
+                                cdo_instance=_sd_probe_cdo,
+                                method='bilinear',
+                            )
+                            if _sidrift_weight_file:
+                                logger.info(
+                                    "    sidrift %s: using cached remap weights (%s) "
+                                    "for %d segment(s).",
+                                    model_name,
+                                    os.path.basename(_sidrift_weight_file),
+                                    len(seg_pairs),
+                                )
 
                     seg_tasks = [(sidx, u_in, v_in) for sidx, (u_in, v_in) in enumerate(seg_pairs)]
                     seg_results: Dict[int, Dict[str, Any]] = {}
@@ -404,16 +548,46 @@ class SidriftPrepMixin:
                     merged_v = os.path.join(tmp, 'v_merged.nc')
                     merge_cdo.mergetime(input=' '.join(os.path.abspath(p) for p in u_chunks), output=merged_u)
                     merge_cdo.mergetime(input=' '.join(os.path.abspath(p) for p in v_chunks), output=merged_v)
-                    self._safe_seldate(merge_cdo, start_date, end_date, merged_u, os.path.abspath(out_u_path))
-                    self._safe_seldate(merge_cdo, start_date, end_date, merged_v, os.path.abspath(out_v_path))
+                    staged_u_path = os.path.join(tmp, 'u_out.nc')
+                    staged_v_path = os.path.join(tmp, 'v_out.nc')
+                    self._safe_seldate(merge_cdo, start_date, end_date, merged_u, staged_u_path)
+                    self._safe_seldate(merge_cdo, start_date, end_date, merged_v, staged_v_path)
 
-                if not (os.path.exists(out_u_path) and os.path.exists(out_v_path)):
-                    logger.error("Failed to create SIdrift outputs for %s", model_name)
-                    return {
-                        'model_index': midx,
-                        'model_name': model_name,
-                        'status': 'failed_output_missing',
-                    }
+                    if not (os.path.exists(staged_u_path) and os.path.exists(staged_v_path)):
+                        logger.error("Failed to create staged SIdrift outputs for %s", model_name)
+                        return {
+                            'model_index': midx,
+                            'model_name': model_name,
+                            'status': 'failed_output_missing',
+                        }
+
+                    with _acquire_path_locks([out_u_path, out_v_path]):
+                        if os.path.exists(out_u_path) and os.path.exists(out_v_path):
+                            if overwrite:
+                                logger.info("    Overwriting existing processed files for %s", model_name)
+                            else:
+                                if self._is_nonempty_time_file(out_u_path) and self._is_nonempty_time_file(out_v_path):
+                                    return {
+                                        'model_index': midx,
+                                        'model_name': model_name,
+                                        'status': 'cached',
+                                        'out_u_name': out_u_name,
+                                        'out_v_name': out_v_name,
+                                    }
+                                logger.warning(
+                                    "    Existing SIdrift outputs have empty time axis; rebuilding: %s",
+                                    model_name,
+                                )
+
+                        for stale_path in (out_u_path, out_v_path):
+                            if os.path.exists(stale_path):
+                                try:
+                                    os.remove(stale_path)
+                                except OSError:
+                                    pass
+
+                        os.replace(staged_u_path, os.path.abspath(out_u_path))
+                        os.replace(staged_v_path, os.path.abspath(out_v_path))
 
                 logger.info("Created: %s / %s", out_u_name, out_v_name)
                 return {
@@ -438,10 +612,61 @@ class SidriftPrepMixin:
                     'status': 'failed_exception',
                     'error': str(exc),
                 }
-            finally:
-                lock_ctx.__exit__(None, None, None)
 
         tasks = [(midx, u_group, v_group) for midx, (u_group, v_group) in enumerate(zip(u_file_groups, v_file_groups))]
+
+        # ------------------------------------------------------------------
+        # Longest-Processing-Time (LPT) scheduling: sort model pairs by
+        # estimated cost descending before submitting to the worker pool.
+        # SIdrift processes paired (u, v) groups; AWI unstructured-grid
+        # models take 3-5× longer than regular models because CDO cannot use
+        # bilinear interpolation and falls back to conservative remapping.
+        # Without LPT, the AWI pair can sit at the end of the queue and block
+        # the final worker slot for hours after all other models have finished.
+        #
+        # Cost proxy: combined file size of u+v groups × unstructured penalty.
+        # Original midx values are preserved so ordered_rows below is stable.
+        # Can be disabled via SITOOL_PREP_LPT_SORT=0.
+        # ------------------------------------------------------------------
+        _lpt_sort_raw = str(
+            os.environ.get('SITOOL_PREP_LPT_SORT', 'auto')
+        ).strip().lower()
+        _enable_lpt = (
+            _lpt_sort_raw not in {'0', 'false', 'no', 'off'}
+            and model_workers > 1
+            and len(tasks) > 1
+        )
+        if _enable_lpt:
+            _UNSTRUCTURED_HINTS: frozenset = frozenset({'awi', 'fesom', 'icon', 'nemo', 'fvcom'})
+
+            def _sidrift_group_cost(task: tuple) -> float:
+                """Estimate processing cost for a u/v model pair.
+
+                Uses total on-disk size of both u and v groups, with a
+                penalty multiplier for unstructured-grid models.
+                """
+                _, u_grp, v_grp = task
+                total_bytes = 0
+                for fpath in (u_grp or []) + (v_grp or []):
+                    try:
+                        total_bytes += os.path.getsize(fpath)
+                    except OSError:
+                        total_bytes += 1
+                first_name = os.path.basename((u_grp or [''])[0]).lower()
+                is_unstructured = any(h in first_name for h in _UNSTRUCTURED_HINTS)
+                return float(total_bytes) * (4.0 if is_unstructured else 1.0)
+
+            tasks_sorted = sorted(tasks, key=_sidrift_group_cost, reverse=True)
+            if tasks_sorted != tasks:
+                top = [os.path.basename((t[1] or [''])[0]) for t in tasks_sorted[:2]]
+                bot = [os.path.basename((t[1] or [''])[0]) for t in tasks_sorted[-2:]]
+                logger.info(
+                    "LPT group scheduling [SIdrift]: reordered %d model pairs by estimated cost "
+                    "(slowest-first). Top-2: [%s] ... Bottom-2: [%s]",
+                    len(tasks_sorted), ', '.join(top), ', '.join(bot),
+                )
+            tasks = tasks_sorted
+
         if model_workers > 1 and len(tasks) > 1:
             from concurrent.futures import ThreadPoolExecutor, as_completed
             result_map: Dict[int, Dict[str, Any]] = {}

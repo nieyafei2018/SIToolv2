@@ -27,6 +27,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
         sisnthick: actual thickness of snow (snow volume divided by snow-covered area)
     """
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, hemisphere: str, year_sta: int, year_end: int,
                  metric: str = 'MAE'):
         """Initialize the thickness metrics calculator.
@@ -43,6 +48,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
         self.year_end = year_end
         self.years = np.arange(year_sta, year_end + 1)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_detrended_std_and_trend_map`.
+    # Purpose: Handle detrended std and trend map workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _detrended_std_and_trend_map(field_ts: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Calculate detrended STD and trend (per decade) for a yearly map series.
@@ -120,6 +130,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
 
         return std_map, trend_map, p_map
 
+    # -----------------------------------------------------------------------------
+    # Function: `_calc_month_series_skill`.
+    # Purpose: Handle calc month series skill workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _calc_month_series_skill(series_ref: np.ndarray, series_cmp: np.ndarray) -> Dict[str, float]:
         """Return Corr/RMSE between two month-filtered 1-D series."""
@@ -132,6 +147,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
         rmse = float(np.sqrt(np.nanmean((y2[valid] - y1[valid]) ** 2)))
         return {'corr': corr, 'rmse': rmse}
 
+    # -----------------------------------------------------------------------------
+    # Function: `Thickness_1M_metrics`.
+    # Purpose: Handle Thickness 1M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def Thickness_1M_metrics(self, thickness, month_list: np.array) -> Dict[str, Union[np.ndarray, object]]:
         """
         Calculate comprehensive metrics for a single thickness dataset.
@@ -221,6 +241,7 @@ class ThicknessMetrics(SeaIceMetricsBase):
                     thick_ano_std_detrended[jx, jy] = np.nanstd(detrended)
 
         Vol_ano_tr = stats.linregress(months, Vol_ano)
+        Vol_ano_std_detrended = utils.detrended_std_1d(Vol_ano)
 
         key_month_products: Dict[str, Union[np.ndarray, object]] = {}
         key_months = self.resolve_key_months(self.hemisphere)
@@ -246,11 +267,16 @@ class ThicknessMetrics(SeaIceMetricsBase):
         return {'uni_mon': unique_months,
                 'thick_clim': thick_clim, 'Vol_clim': Vol_clim,
                 'thick_ano': thick_ano, 'Vol_ano': Vol_ano,
-                'thick_ano_std': np.nanstd(thick_ano, axis=0), 'Vol_ano_std': np.nanstd(Vol_ano),
+                'thick_ano_std': thick_ano_std_detrended, 'Vol_ano_std': Vol_ano_std_detrended,
                 'thick_ano_tr': thick_ano_tr, 'thick_ano_tr_p': thick_ano_tr_p,
                 'Vol_ano_tr': Vol_ano_tr,
                 **key_month_products}
 
+    # -----------------------------------------------------------------------------
+    # Function: `Thickness_2M_metrics`.
+    # Purpose: Handle Thickness 2M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def Thickness_2M_metrics(self, thick1_file: str, thick1_key: str,
                              thick2_file: str, thick2_key: str,
                              strict_obs_match: bool = False,
@@ -382,7 +408,7 @@ class ThicknessMetrics(SeaIceMetricsBase):
             thick1, thick2, strict_obs_match=strict_obs_match, obs_match=obs_match
         )
 
-        month_list = [month for year, month in yearmon_list]
+        month_list = [month for _, month in yearmon_list]
 
         # Pairwise spatial diagnostics use co-located arrays on the shared overlap.
         # For integrated volume:
@@ -417,7 +443,7 @@ class ThicknessMetrics(SeaIceMetricsBase):
         Vol_std_diff = utils.MatrixDiff(sit1['Vol_ano_std'], sit2['Vol_ano_std'], metric=self.metric)
 
         # 3. Trend
-        nt, nx, ny = thick01.shape
+        nt, _, _ = thick01.shape
         if nt / 12 < 15:
             logger.warning("Years analyzed < 15 — trends have considerable uncertainty.")
         thick_trend_diff = utils.MatrixDiff(sit1['thick_ano_tr'],
@@ -458,6 +484,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
                 'Vol_trend_diff': Vol_trend_diff,
                 **key_month_diff}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_month_coverage`.
+    # Purpose: Handle month coverage workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _month_coverage(self, file_path: str, var_key: str) -> set:
         """Return the set of (year, month) tuples present in *file_path* within [year_sta, year_end].
 
@@ -481,6 +512,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
             logger.warning("_month_coverage: could not read %s (%s)", file_path, exc)
         return covered
 
+    # -----------------------------------------------------------------------------
+    # Function: `_time_values_to_yearmon`.
+    # Purpose: Handle time values to yearmon workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _time_values_to_yearmon(self, time_values: np.ndarray) -> List[Tuple[int, int]]:
         """Convert heterogeneous time arrays to ``[(year, month), ...]``.
 
@@ -511,6 +547,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
                 out.append((year, month))
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_validate_ts_match`.
+    # Purpose: Handle validate ts match workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _validate_ts_match(self, thick1: np.ndarray, thick2: np.ndarray,
                            strict_obs_match: bool = False,
                            obs_match: Optional[np.ndarray] = None):
@@ -557,6 +598,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
         thick02[invalid] = np.nan
         return thick01, thick02
 
+    # -----------------------------------------------------------------------------
+    # Function: `_read_thickness_data`.
+    # Purpose: Handle read thickness data workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _read_thickness_data(self, thick1_file: str, thick1_key: str,
                              thick2_file: str, thick2_key: str,
                              allowed_yearmon: Optional[set] = None) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], List[Tuple[int, int]]]:
@@ -636,6 +682,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
 
         return thick1, thick2, yearmon_list
 
+    # -----------------------------------------------------------------------------
+    # Function: `_get_time_dimension`.
+    # Purpose: Handle get time dimension workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _get_time_dimension(self, dataset: xr.Dataset) -> str:
         """Identify time dimension name in dataset."""
         time_candidates = [dim for dim in dataset.dims
@@ -648,6 +699,11 @@ class ThicknessMetrics(SeaIceMetricsBase):
 
         return time_candidates[0]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_has_data_for_period`.
+    # Purpose: Handle has data for period workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _has_data_for_period(self, otime: pd.DatetimeIndex, mtime: pd.DatetimeIndex,
                              year: int, month: int) -> bool:
         """Check if both datasets have data for the specified period."""

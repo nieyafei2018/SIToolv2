@@ -93,7 +93,8 @@ _MODULE_FLAG = {
     'SNMbudget': 'eval_snmb',
 }
 
-CACHE_SCHEMA_VERSION = 'metrics-cache-v4'
+CACHE_SCHEMA_VERSION = 'metrics-cache-v5'
+CACHE_SEMANTICS_VERSION = 'metrics-semantics-rawdiff-lin2021-detrendedstd-metriclabels-v2'
 UNIFIED_CACHE_SCHEMA_VERSION = 'metrics-cache-unified-v1'
 _CACHE_ENGINES = ('netcdf4', 'h5netcdf', None)
 _CACHE_META_GROUP = '/__metadata__'
@@ -104,6 +105,53 @@ _GROUP_MEAN_LABEL_PREFIX = 'GroupMean['
 _GROUP_MEAN_LABEL_SUFFIX = ']'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_metric_meta`.
+# Purpose: Handle metric meta workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _metric_meta(
+    code: str,
+    short_label: str,
+    *,
+    long_label: str = '',
+    scope: str = '',
+    stat: str = '',
+    op: str = '',
+    std_type: str = 'none',
+) -> Dict[str, str]:
+    """Build one metric-metadata record for HTML tables."""
+    return {
+        'code': str(code or '').strip(),
+        'short_label': str(short_label or '').strip(),
+        'long_label': str(long_label or short_label or '').strip(),
+        'scope': str(scope or '').strip(),
+        'stat': str(stat or '').strip(),
+        'op': str(op or '').strip(),
+        'std_type': str(std_type or 'none').strip() or 'none',
+    }
+
+
+# -----------------------------------------------------------------------------
+# Function: `_metric_std_type_from_stat`.
+# Purpose: Handle metric std type from stat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _metric_std_type_from_stat(stat: str, default: str = 'none') -> str:
+    """Infer std semantics from one normalized statistic token."""
+    s = str(stat or '').strip().lower()
+    if s in {'dstd', 'detrended_std'}:
+        return 'detrended'
+    if s in {'std'}:
+        return 'raw_or_unspecified'
+    return str(default or 'none')
+
+
+# -----------------------------------------------------------------------------
+# Function: `_is_retryable_nc_error`.
+# Purpose: Handle is retryable nc error workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_retryable_nc_error(exc: Exception) -> bool:
     """Return True when a NetCDF read/write failure is likely transient/lock-related."""
     text = str(exc).lower()
@@ -121,6 +169,11 @@ def _is_retryable_nc_error(exc: Exception) -> bool:
     return any(tok in text for tok in retry_tokens)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_safe_unlink`.
+# Purpose: Handle safe unlink workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _safe_unlink(path: Path) -> None:
     """Delete a file with bounded retries for transient lock contention."""
     for attempt in range(_NC_IO_RETRIES):
@@ -135,6 +188,11 @@ def _safe_unlink(path: Path) -> None:
             time.sleep(_NC_IO_BASE_DELAY_SEC * (attempt + 1))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_safe_replace`.
+# Purpose: Handle safe replace workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _safe_replace(src: Path, dst: Path) -> None:
     """Atomically replace one file with retries for transient lock contention."""
     for attempt in range(_NC_IO_RETRIES):
@@ -147,6 +205,11 @@ def _safe_replace(src: Path, dst: Path) -> None:
             time.sleep(_NC_IO_BASE_DELAY_SEC * (attempt + 1))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_ensure_accessible_directory`.
+# Purpose: Handle ensure accessible directory workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _ensure_accessible_directory(path: Path) -> Tuple[bool, Optional[str]]:
     """Create a directory if needed and verify it is traversable/writable."""
     try:
@@ -164,6 +227,11 @@ def _ensure_accessible_directory(path: Path) -> Tuple[bool, Optional[str]]:
         return False, str(exc)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_case_run_dir`.
+# Purpose: Handle resolve case run dir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_case_run_dir(case_name: str, log_warning: bool = True) -> Path:
     """Resolve a writable case directory, with fallback for broken/ghost paths."""
     cases_root = Path('cases')
@@ -188,12 +256,17 @@ def _resolve_case_run_dir(case_name: str, log_warning: bool = True) -> Path:
     return fallback
 
 
+# -----------------------------------------------------------------------------
+# Function: `_configure_worker_logging`.
+# Purpose: Handle configure worker logging workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _configure_worker_logging(case_name: str, hemisphere: str, module: str) -> Path:
     """Configure one isolated log file for a worker process.
 
     Process-based hemisphere workers should not write into the main run log
     file, because independent file offsets can corrupt the stream under
-    concurrent writes. Each worker writes to its own append-only log file.
+    concurrent writes. Each worker writes to its own per-run log file.
     """
     level_name = os.environ.get('SITOOL_LOG_LEVEL', 'INFO').upper()
     level = getattr(logging, level_name, logging.INFO)
@@ -216,7 +289,8 @@ def _configure_worker_logging(case_name: str, hemisphere: str, module: str) -> P
     root.handlers.clear()
     root.setLevel(level)
 
-    fh = logging.FileHandler(worker_log, mode='a', encoding='utf-8')
+    # Overwrite stale logs when OS reuses PIDs across different runs.
+    fh = logging.FileHandler(worker_log, mode='w', encoding='utf-8')
     fh.setLevel(level)
     fh.setFormatter(fmt)
     root.addHandler(fh)
@@ -224,6 +298,11 @@ def _configure_worker_logging(case_name: str, hemisphere: str, module: str) -> P
     return worker_log
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_worker_count`.
+# Purpose: Handle resolve worker count workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_worker_count(requested_jobs: int, max_cpu_fraction: float = _DEFAULT_MAX_CPU_FRACTION) -> int:
     """Resolve an effective worker count and enforce the interactive >60% confirmation rule.
 
@@ -268,6 +347,11 @@ def _resolve_worker_count(requested_jobs: int, max_cpu_fraction: float = _DEFAUL
     return limit
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_default_prep_parallel_cap`.
+# Purpose: Handle resolve default prep parallel cap workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_default_prep_parallel_cap(requested_jobs: int, module: str, case_name: str = '') -> int:
     """Resolve default Python-side preprocessing worker cap for one module task.
 
@@ -324,6 +408,11 @@ def _resolve_default_prep_parallel_cap(requested_jobs: int, module: str, case_na
     return max(1, min(safe_jobs, cap))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_install_thread_safe_plot_wrappers`.
+# Purpose: Handle install thread safe plot wrappers workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _install_thread_safe_plot_wrappers() -> None:
     """Wrap plot_figs.plot_* entry points with a global plotting lock.
 
@@ -338,7 +427,17 @@ def _install_thread_safe_plot_wrappers() -> None:
         if getattr(func, '_sitool_locked_plot', False):
             continue
 
+        # -----------------------------------------------------------------------------
+        # Function: `_make_locked`.
+        # Purpose: Handle make locked workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _make_locked(f):
+            # -----------------------------------------------------------------------------
+            # Function: `_locked`.
+            # Purpose: Handle locked workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _locked(*args, **kwargs):
                 with _PLOT_LOCK:
                     return f(*args, **kwargs)
@@ -350,6 +449,11 @@ def _install_thread_safe_plot_wrappers() -> None:
         setattr(pf, name, _make_locked(func))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_model_count_for_module`.
+# Purpose: Handle model count for module workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _model_count_for_module(module: str, module_vars: Dict[str, Any]) -> int:
     """Return the declared model count for one module from the recipe."""
     if module == 'SIdrift':
@@ -373,6 +477,11 @@ def _model_count_for_module(module: str, module_vars: Dict[str, Any]) -> int:
     return len(module_vars.get('model_file') or [])
 
 
+# -----------------------------------------------------------------------------
+# Function: `_obs_count_for_module`.
+# Purpose: Handle obs count for module workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _obs_count_for_module(module: str, module_vars: Dict[str, Any], hemisphere: str) -> int:
     """Return the observation count for one module/hemisphere from the recipe."""
     hms = str(hemisphere or '').lower()
@@ -385,6 +494,11 @@ def _obs_count_for_module(module: str, module_vars: Dict[str, Any], hemisphere: 
     return len(module_vars.get(f'ref_{hms}') or [])
 
 
+# -----------------------------------------------------------------------------
+# Function: `_estimate_per_hemisphere_parallel_cap`.
+# Purpose: Handle estimate per hemisphere parallel cap workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _estimate_per_hemisphere_parallel_cap(
     recipe: RR.RecipeReader,
     modules_to_run: List[str],
@@ -408,6 +522,11 @@ def _estimate_per_hemisphere_parallel_cap(
     return max(1, cap)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_safe_job_plan`.
+# Purpose: Handle resolve safe job plan workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_safe_job_plan(
     requested_jobs: int,
     recipe: RR.RecipeReader,
@@ -502,6 +621,11 @@ def _log_module_header(module: str) -> None:
     logger.info("=" * 40)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_year_range`.
+# Purpose: Handle get year range workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_year_range(module_vars: dict) -> Tuple[int, int]:
     """Extract and validate (start_year, end_year) from module config."""
     year_range = module_vars.get('year_range')
@@ -520,12 +644,22 @@ def _get_year_range(module_vars: dict) -> Tuple[int, int]:
     return year_sta, year_end
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_metric`.
+# Purpose: Handle get metric workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_metric(module_vars: dict) -> str:
     """Read scalar metric name from module config with backward-compatible fallback."""
     metric = module_vars.get('stats_metric', module_vars.get('metric', 'RMSE'))
     return str(metric)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_validate_sidrift_direction_config`.
+# Purpose: Handle validate sidrift direction config workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _validate_sidrift_direction_config(module_vars: dict, n_models: int) -> List[str]:
     """Validate and normalize SIdrift per-model direction tags.
 
@@ -566,6 +700,11 @@ def _validate_sidrift_direction_config(module_vars: dict, n_models: int) -> List
     return normalized
 
 
+# -----------------------------------------------------------------------------
+# Function: `_is_group_mean_label`.
+# Purpose: Handle is group mean label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_group_mean_label(label: Any) -> bool:
     """Return whether one dataset label is a synthetic group-mean label."""
     text = str(label if label is not None else '').strip()
@@ -579,6 +718,11 @@ def _is_group_mean_label(label: Any) -> bool:
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `_format_group_mean_label`.
+# Purpose: Handle format group mean label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _format_group_mean_label(group_name: Any) -> str:
     """Build one stable group-mean display label."""
     raw = str(group_name if group_name is not None else '').strip()
@@ -586,12 +730,22 @@ def _format_group_mean_label(group_name: Any) -> str:
     return f'{_GROUP_MEAN_LABEL_PREFIX}{token}{_GROUP_MEAN_LABEL_SUFFIX}'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_normalize_group_token`.
+# Purpose: Handle normalize group token workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _normalize_group_token(value: Any) -> str:
     """Normalize one group member token for robust matching."""
     txt = str(value if value is not None else '').strip().lower()
     return re.sub(r'[^a-z0-9]+', '', txt)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_group_mean_specs`.
+# Purpose: Handle resolve group mean specs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_group_mean_specs(
     module: str,
     module_vars: Dict[str, Any],
@@ -691,6 +845,11 @@ def _resolve_group_mean_specs(
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_nanmean_payload`.
+# Purpose: Handle nanmean payload workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _nanmean_payload(values: List[Any]) -> Any:
     """Compute NaN-safe mean for nested metric payloads (numeric fields only)."""
     vals = [v for v in values if v is not None]
@@ -738,6 +897,11 @@ def _nanmean_payload(values: List[Any]) -> Any:
     return np.asarray(mean, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_nanstd_payload`.
+# Purpose: Handle nanstd payload workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _nanstd_payload(values: List[Any]) -> Any:
     """Compute NaN-safe std for nested metric payloads (numeric fields only)."""
     vals = [v for v in values if v is not None]
@@ -784,6 +948,11 @@ def _nanstd_payload(values: List[Any]) -> Any:
     return np.asarray(std, dtype=float)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_recompute_ano_series_stats`.
+# Purpose: Handle recompute ano series stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _recompute_ano_series_stats(payload: Any) -> Any:
     """Recompute 1-D anomaly-derived std/trend fields from ``*_ano`` series.
 
@@ -850,6 +1019,11 @@ def _recompute_ano_series_stats(payload: Any) -> Any:
     return payload
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_group_mean_std_payloads`.
+# Purpose: Handle build group mean std payloads workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_group_mean_std_payloads(
     model_payloads: List[Any],
     model_labels: List[str],
@@ -888,6 +1062,11 @@ def _build_group_mean_std_payloads(
     return group_mean_payloads, group_std_payloads, group_labels
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_group_member_file_map`.
+# Purpose: Handle build group member file map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_group_member_file_map(
     file_paths: List[str],
     model_labels: List[str],
@@ -916,6 +1095,11 @@ def _build_group_member_file_map(
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_group_mean_payloads`.
+# Purpose: Handle build group mean payloads workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_group_mean_payloads(
     model_payloads: List[Any],
     diff_payloads: Optional[List[Any]],
@@ -969,6 +1153,11 @@ def _build_group_mean_payloads(
     return merged_models, merged_diffs, merged_labels, group_labels
 
 
+# -----------------------------------------------------------------------------
+# Function: `_compute_group_mean_netcdf`.
+# Purpose: Handle compute group mean netcdf workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _compute_group_mean_netcdf(
     member_files: List[str],
     output_file: Union[str, Path],
@@ -1154,6 +1343,11 @@ def _compute_group_mean_netcdf(
     return str(out_path)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_group_mean_file_payloads`.
+# Purpose: Handle build group mean file payloads workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_group_mean_file_payloads(
     file_paths: List[str],
     model_labels: List[str],
@@ -1209,6 +1403,11 @@ def _build_group_mean_file_payloads(
     return group_files + base_files, group_labels + base_labels, group_labels
 
 
+# -----------------------------------------------------------------------------
+# Function: `_parse_table_numeric`.
+# Purpose: Handle parse table numeric workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _parse_table_numeric(value: Any) -> float:
     """Parse one table cell into float when possible."""
     if value is None:
@@ -1227,6 +1426,11 @@ def _parse_table_numeric(value: Any) -> float:
     return out if np.isfinite(out) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_inject_group_rows_in_rows`.
+# Purpose: Handle inject group rows in rows workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _inject_group_rows_in_rows(
     rows: List[List[Any]],
     group_specs: List[Dict[str, Any]],
@@ -1289,6 +1493,11 @@ def _inject_group_rows_in_rows(
     return rows[:insert_at] + new_group_rows + rows[insert_at:]
 
 
+# -----------------------------------------------------------------------------
+# Function: `_inject_group_rows_into_table_payload`.
+# Purpose: Handle inject group rows into table payload workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _inject_group_rows_into_table_payload(
     payload: Any,
     group_specs: List[Dict[str, Any]],
@@ -1341,6 +1550,11 @@ def _inject_group_rows_into_table_payload(
     return payload
 
 
+# -----------------------------------------------------------------------------
+# Function: `_format_min_sig`.
+# Purpose: Handle format min sig workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _format_min_sig(value: Any, min_sig: int = 3, max_decimals: int = 10) -> str:
     """Format a scalar with at least ``min_sig`` significant digits."""
     if value is None:
@@ -1375,6 +1589,11 @@ def _format_min_sig(value: Any, min_sig: int = 3, max_decimals: int = 10) -> str
     return txt
 
 
+# -----------------------------------------------------------------------------
+# Function: `_calc_obs2_ratio`.
+# Purpose: Handle calc obs2 ratio workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _calc_obs2_ratio(value: Any, obs2_value: Any, eps: float = 1e-9) -> float:
     """Backward-compatible helper: keep physical-difference value unchanged.
 
@@ -1393,6 +1612,11 @@ def _calc_obs2_ratio(value: Any, obs2_value: Any, eps: float = 1e-9) -> float:
     return vv if np.isfinite(vv) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_obs2_identity_ratio`.
+# Purpose: Handle obs2 identity ratio workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _obs2_identity_ratio(obs2_value: Any, eps: float = 1e-9) -> float:
     """Backward-compatible helper: keep obs2 physical-difference value."""
     _ = eps
@@ -1403,6 +1627,11 @@ def _obs2_identity_ratio(obs2_value: Any, eps: float = 1e-9) -> float:
     return bb if np.isfinite(bb) else np.nan
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_metric_table`.
+# Purpose: Handle build metric table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_metric_table(headers: list, obs2_diff, diff_dicts: list,
                         model_labels: list, units: list = None,
                         obs1_label: str = 'obs1 (baseline)',
@@ -1435,6 +1664,11 @@ def _build_metric_table(headers: list, obs2_diff, diff_dicts: list,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_staged_payloads`.
+# Purpose: Handle load staged payloads workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_staged_payloads(stage_refs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Load staged worker payloads in their original order."""
     payloads: List[Dict[str, Any]] = []
@@ -1444,6 +1678,11 @@ def _load_staged_payloads(stage_refs: List[Dict[str, Any]]) -> List[Dict[str, An
     return payloads
 
 
+# -----------------------------------------------------------------------------
+# Function: `_format_siconc_value`.
+# Purpose: Handle format siconc value workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _format_siconc_value(value: float, digits: int = 3) -> str:
     """Format SIconc scalar values for report display."""
     if value is None:
@@ -1455,6 +1694,11 @@ def _format_siconc_value(value: float, digits: int = 3) -> str:
     return 'nan' if np.isnan(val) else f'{val:.{digits}f}'
 
 
+# -----------------------------------------------------------------------------
+# Function: `_format_siconc_trend`.
+# Purpose: Handle format siconc trend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _format_siconc_trend(trend: float, pvalue: float, digits: int = 3) -> str:
     """Format trend with optional significance marker."""
     txt = _format_siconc_value(trend, digits=digits)
@@ -1467,6 +1711,11 @@ def _format_siconc_trend(trend: float, pvalue: float, digits: int = 3) -> str:
     return f'{txt}*' if np.isfinite(pv) and pv < 0.05 else txt
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_season_months`.
+# Purpose: Handle siconc season months workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     """Return canonical season -> month mapping for one hemisphere."""
     h = str(hemisphere or '').lower()
@@ -1485,6 +1734,11 @@ def _siconc_season_months(hemisphere: str) -> Dict[str, Tuple[int, int, int]]:
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_weighted_clim_value`.
+# Purpose: Handle siconc weighted clim value workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_weighted_clim_value(monthly_vals: np.ndarray, months: Tuple[int, ...]) -> float:
     """Weighted mean over selected calendar months from 12-month climatology."""
     if monthly_vals.size < 12:
@@ -1504,6 +1758,11 @@ def _siconc_weighted_clim_value(monthly_vals: np.ndarray, months: Tuple[int, ...
     return float(np.nansum(vals * wts) / np.sum(wts))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_siconc_iiee_period_stats`.
+# Purpose: Handle build siconc iiee period stats workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_siconc_iiee_period_stats(diff_stats: Dict[str, Any], hemisphere: str) -> Dict[str, float]:
     """Convert SIconc pairwise diff payload to period-wise IIEE means."""
     out = {k: np.nan for k in ('annual', 'spring', 'summer', 'autumn', 'winter', 'march', 'september')}
@@ -1526,18 +1785,47 @@ def _build_siconc_iiee_period_stats(diff_stats: Dict[str, Any], hemisphere: str)
     return out
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_siconc_period_table`.
+# Purpose: Handle build siconc period table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_siconc_period_table(obs1_stats: dict, obs2_stats: dict,
                                model_stats_list: list, model_labels: list,
                                obs1_label: str = 'obs1 (baseline)',
                                obs2_label: str = 'obs2') -> dict:
     """Build Shu-style period-tab table payload for SIconc."""
-    headers = [
-        'Dataset',
-        'SIE_mean', 'SIE_trend', 'SIE_detrended_std',
-        'SIA_mean', 'SIA_trend', 'SIA_detrended_std',
-        'MIZ_mean', 'MIZ_trend', 'MIZ_detrended_std',
-        'PIA_mean', 'PIA_trend', 'PIA_detrended_std',
-    ]
+    metric_meta: List[Dict[str, str]] = []
+    for _var in ('SIE', 'SIA', 'MIZ', 'PIA'):
+        _vl = str(_var).lower()
+        metric_meta.extend([
+            _metric_meta(
+                f'siconc.{_vl}.mean.ts.raw',
+                f'{_var} Mean[TS] Raw',
+                long_label=f'{_var} period mean (raw value)',
+                scope='TS',
+                stat='Mean',
+                op='Raw',
+            ),
+            _metric_meta(
+                f'siconc.{_vl}.trend.ts.raw',
+                f'{_var} Trend[TS] Raw',
+                long_label=f'{_var} period trend (raw value)',
+                scope='TS',
+                stat='Trend',
+                op='Raw',
+            ),
+            _metric_meta(
+                f'siconc.{_vl}.dstd.ts.raw',
+                f'{_var} DStd[TS] Raw',
+                long_label=f'{_var} detrended standard deviation (raw value)',
+                scope='TS',
+                stat='DStd',
+                op='Raw',
+                std_type='detrended',
+            ),
+        ])
+    headers = ['Dataset'] + [m['short_label'] for m in metric_meta]
     units = [
         '',
         '10⁶ km²', '10⁶ km²/decade', '10⁶ km²',
@@ -1579,10 +1867,16 @@ def _build_siconc_period_table(obs1_stats: dict, obs2_stats: dict,
         'type': 'period_table',
         'headers': headers,
         'units': units,
+        'metric_meta': metric_meta,
         'periods': periods,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_siconc_period_diff_table`.
+# Purpose: Handle build siconc period diff table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_siconc_period_diff_table(obs1_stats: dict, obs2_stats: dict,
                                     model_stats_list: list, model_labels: list,
                                     iiee_period_obs2: Optional[Dict[str, float]] = None,
@@ -1590,14 +1884,47 @@ def _build_siconc_period_diff_table(obs1_stats: dict, obs2_stats: dict,
                                     obs1_label: str = 'obs1 (baseline)',
                                     obs2_label: str = 'obs2') -> dict:
     """Build period-tab SIconc difference table relative to obs1."""
-    headers = [
-        'Dataset',
-        'SIE_mean_diff', 'SIE_trend_diff', 'SIE_detrended_std_diff',
-        'SIA_mean_diff', 'SIA_trend_diff', 'SIA_detrended_std_diff',
-        'MIZ_mean_diff', 'MIZ_trend_diff', 'MIZ_detrended_std_diff',
-        'PIA_mean_diff', 'PIA_trend_diff', 'PIA_detrended_std_diff',
-        'IIEE_mean_diff',
-    ]
+    metric_meta: List[Dict[str, str]] = []
+    for _var in ('SIE', 'SIA', 'MIZ', 'PIA'):
+        _vl = str(_var).lower()
+        metric_meta.extend([
+            _metric_meta(
+                f'siconc.{_vl}.mean.ts.absdiff',
+                f'{_var} Mean AbsDiff[TS]',
+                long_label=f'Absolute difference of {_var} period mean relative to obs1',
+                scope='TS',
+                stat='Mean',
+                op='AbsDiff',
+            ),
+            _metric_meta(
+                f'siconc.{_vl}.trend.ts.absdiff',
+                f'{_var} Trend AbsDiff[TS]',
+                long_label=f'Absolute difference of {_var} period trend relative to obs1',
+                scope='TS',
+                stat='Trend',
+                op='AbsDiff',
+            ),
+            _metric_meta(
+                f'siconc.{_vl}.dstd.ts.absdiff',
+                f'{_var} DStd AbsDiff[TS]',
+                long_label=f'Absolute difference of {_var} detrended std relative to obs1',
+                scope='TS',
+                stat='DStd',
+                op='AbsDiff',
+                std_type='detrended',
+            ),
+        ])
+    metric_meta.append(
+        _metric_meta(
+            'siconc.iiee.mean.ts.absdiff',
+            'IIEE Mean AbsDiff[TS]',
+            long_label='Absolute difference of IIEE period mean relative to obs1',
+            scope='TS',
+            stat='Mean',
+            op='AbsDiff',
+        )
+    )
+    headers = ['Dataset'] + [m['short_label'] for m in metric_meta]
     base_units = [
         '',
         '10⁶ km²', '10⁶ km²/decade', '10⁶ km²',
@@ -1625,6 +1952,11 @@ def _build_siconc_period_diff_table(obs1_stats: dict, obs2_stats: dict,
     model_iiee_periods: List[Dict[str, float]] = list(iiee_period_model_list or [])
     obs2_iiee_period = iiee_period_obs2 if isinstance(iiee_period_obs2, dict) else {}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_to_float`.
+    # Purpose: Handle to float workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _to_float(value: Any) -> float:
         try:
             out = float(value)
@@ -1632,6 +1964,11 @@ def _build_siconc_period_diff_table(obs1_stats: dict, obs2_stats: dict,
             return np.nan
         return out if np.isfinite(out) else np.nan
 
+    # -----------------------------------------------------------------------------
+    # Function: `_diff_value`.
+    # Purpose: Handle diff value workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _diff_value(lhs: dict, rhs: dict, key: str) -> float:
         lv = _to_float(lhs.get(key))
         rv = _to_float(rhs.get(key))
@@ -1691,10 +2028,16 @@ def _build_siconc_period_diff_table(obs1_stats: dict, obs2_stats: dict,
         'type': 'period_table',
         'headers': headers,
         'units': units,
+        'metric_meta': metric_meta,
         'periods': periods,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_siconc_period_to_seasonal_table`.
+# Purpose: Handle siconc period to seasonal table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _siconc_period_to_seasonal_table(period_table: dict) -> dict:
     """Convert SIconc period table payload to seasonal_table schema."""
     periods = period_table.get('periods', {}) if isinstance(period_table, dict) else {}
@@ -1710,10 +2053,16 @@ def _siconc_period_to_seasonal_table(period_table: dict) -> dict:
         'headers': list(period_table.get('headers', [])),
         'rows': [],
         'units': list(period_table.get('units', [])),
+        'metric_meta': list(period_table.get('metric_meta', [])),
         'seasons': {k: list(periods.get(k, [])) for k in season_order},
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_siconc_region_period_table`.
+# Purpose: Handle build siconc region period table workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_siconc_region_period_table(hemisphere: str,
                                       regional_stats: Dict[str, Dict[str, Any]],
                                       model_labels: list,
@@ -1773,6 +2122,11 @@ def _build_siconc_region_period_table(hemisphere: str,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_build_region_table_payload`.
+# Purpose: Handle build region table payload workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _build_region_table_payload(hemisphere: str,
                                 regional_tables: Dict[str, Any],
                                 payload_type: str = 'region_table') -> dict:
@@ -1801,6 +2155,11 @@ def _build_region_table_payload(hemisphere: str,
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_run_preprocessing`.
+# Purpose: Handle run preprocessing workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _run_preprocessing(case_name: str, module: str, recipe: RR.RecipeReader,
                        data_dir: Path, frequency: str = 'monthly',
                        obs_flag: Optional[str] = None,
@@ -1841,6 +2200,11 @@ def _run_preprocessing(case_name: str, module: str, recipe: RR.RecipeReader,
     return grid_file, obs_files, model_files
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_eval_grid`.
+# Purpose: Handle get eval grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_eval_grid(case_name: str, module: str, hemisphere: str) -> str:
     """Generate or reuse the evaluation grid without running full preprocessing."""
     hms = str(hemisphere or '').lower()
@@ -1853,6 +2217,11 @@ def _get_eval_grid(case_name: str, module: str, hemisphere: str) -> str:
     return preprocessor.gen_eval_grid()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_is_grid_file_healthy`.
+# Purpose: Handle is grid file healthy workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _is_grid_file_healthy(grid_file: Path) -> Tuple[bool, Optional[str]]:
     """Return True when one prebuilt evaluation grid can be opened safely."""
     nc_path = Path(grid_file)
@@ -1873,6 +2242,11 @@ def _is_grid_file_healthy(grid_file: Path) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
+# -----------------------------------------------------------------------------
+# Function: `_prepare_eval_grids_serial`.
+# Purpose: Handle prepare eval grids serial workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _prepare_eval_grids_serial(
     case_name: str,
     bootstrap_module: str,
@@ -1913,6 +2287,11 @@ def _prepare_eval_grids_serial(
 
 
 
+# -----------------------------------------------------------------------------
+# Function: `_init_case_dirs`.
+# Purpose: Handle init case dirs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _init_case_dirs(case_dir: Path, eval_hms: List[str],
                     modules_to_run: List[str]) -> Tuple[Path, Path]:
     """Create and return (data_dir, output_dir) with all sub-directories pre-created.
@@ -1999,7 +2378,18 @@ def _run_one_module_task(
     if not str(prev_cdo_threads or '').strip():
         cdo_threads = requested_jobs
         if aggressive_parallel:
-            if module in {'SICB', 'SIdrift', 'SItrans'}:
+            if module in {'SICB', 'SIdrift'}:
+                # In aggressive-parallel mode, group_workers × 2 hemispheres already
+                # saturates all available cores with concurrent CDO processes.
+                # Example: SICB 9 workers × 2 hemispheres = 18 simultaneous CDO calls;
+                # SIdrift 6 × 2 = 12.  Setting CDO internal threads to 4 compounds this
+                # to (18+12) × 4 = 120 CDO threads on 36 cores — a 3.3× oversubscription
+                # that causes context-switch thrashing and slows every CDO call 2-4×.
+                # Fix: use CDO threads=1 so that parallelism comes exclusively from the
+                # group_workers dimension (horizontal), not from within each CDO process
+                # (vertical).  This keeps the total thread count ≤ physical core count.
+                cdo_threads = 1
+            elif module == 'SItrans':
                 cdo_threads = min(requested_jobs, 4)
             elif module in {'SIconc', 'SIthick', 'SNdepth'}:
                 cdo_threads = min(requested_jobs, 3)
@@ -2084,6 +2474,11 @@ def _run_one_module_task(
     }
 
 
+# -----------------------------------------------------------------------------
+# Function: `_refresh_html_report`.
+# Purpose: Handle refresh html report workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _refresh_html_report(
     case_name: str,
     output_dir: Path,
@@ -2094,15 +2489,30 @@ def _refresh_html_report(
     """Regenerate summary_report.html after one module task completes."""
     report_file = Path(output_dir) / 'summary_report.html'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_metric_table_store_file`.
+    # Purpose: Handle metric table store file workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _metric_table_store_file() -> Path:
         return Path(output_dir) / '.metric_tables.pkl'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_save_metric_tables_snapshot`.
+    # Purpose: Handle save metric tables snapshot workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _save_metric_tables_snapshot() -> None:
         store_file = _metric_table_store_file()
         store_file.parent.mkdir(parents=True, exist_ok=True)
         with open(store_file, 'wb') as f:
             pickle.dump(metric_tables, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_resolve_report_modules`.
+    # Purpose: Handle resolve report modules workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _resolve_report_modules() -> List[str]:
         module_set = set(modules_to_run or [])
         for hms_tables in (metric_tables or {}).values():
@@ -2121,6 +2531,11 @@ def _refresh_html_report(
         extras = sorted(m for m in module_set if m not in ALL_MODULES)
         return ordered + extras
 
+    # -----------------------------------------------------------------------------
+    # Function: `_extract_panel_block`.
+    # Purpose: Handle extract panel block workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _extract_panel_block(html_text: str, panel_id: str) -> Optional[str]:
         marker = f'<div class="panel" id="{panel_id}">'
         start = html_text.find(marker)
@@ -2219,6 +2634,11 @@ def _refresh_html_report(
         logger.warning("Failed to refresh HTML report after %s (%s).", context, exc)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_load_metric_table_store`.
+# Purpose: Handle load metric table store workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _load_metric_table_store(
     output_dir: Path,
     hemispheres: Optional[List[str]] = None,

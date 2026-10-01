@@ -7,6 +7,7 @@ via CDO for both observation and model datasets.
 """
 
 import datetime
+import errno
 import json
 import logging
 import os
@@ -15,7 +16,7 @@ import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -41,6 +42,37 @@ _PATH_LOCKS: Dict[str, threading.Lock] = {}
 _PATH_LOCKS_GUARD = threading.Lock()
 
 
+# -----------------------------------------------------------------------------
+# Function: `_path_lock_timeout_seconds`.
+# Purpose: Handle path lock timeout seconds workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _path_lock_timeout_seconds() -> Optional[float]:
+    """Resolve cross-process lock wait timeout from environment.
+
+    Returns:
+        Timeout in seconds when enabled; ``None`` means wait forever.
+
+    Notes:
+        - ``SITOOL_PATH_LOCK_TIMEOUT_SECONDS<=0`` disables timeout behavior.
+        - Default keeps behavior safe for concurrent case runs while avoiding
+          indefinite blocking on stale/contended lock files.
+    """
+    raw = str(os.environ.get('SITOOL_PATH_LOCK_TIMEOUT_SECONDS', '900')).strip()
+    try:
+        timeout_s = float(raw)
+    except Exception:
+        timeout_s = 900.0
+    if timeout_s <= 0:
+        return None
+    return max(1.0, float(timeout_s))
+
+
+# -----------------------------------------------------------------------------
+# Function: `_plan_nested_workers`.
+# Purpose: Handle plan nested workers workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _plan_nested_workers(total_jobs: int, n_groups: int) -> Tuple[int, int]:
     """Plan a bounded two-level worker layout.
 
@@ -75,6 +107,11 @@ def _plan_nested_workers(total_jobs: int, n_groups: int) -> Tuple[int, int]:
     return max(1, outer), max(1, inner)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_get_path_lock`.
+# Purpose: Handle get path lock workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _get_path_lock(path: str) -> threading.Lock:
     """Return a stable process-local lock object for one filesystem path."""
     norm_path = os.path.abspath(str(path))
@@ -86,12 +123,18 @@ def _get_path_lock(path: str) -> threading.Lock:
         return lock
 
 
+# -----------------------------------------------------------------------------
+# Function: `_acquire_path_locks`.
+# Purpose: Handle acquire path locks workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 @contextmanager
 def _acquire_path_locks(paths: List[str]):
     """Acquire deterministic in-process and cross-process path locks."""
     normalized = sorted({os.path.abspath(str(p)) for p in paths})
     locks = [_get_path_lock(p) for p in normalized]
     fd_locks: List[int] = []
+    lock_timeout_s = _path_lock_timeout_seconds()
 
     for lock in locks:
         lock.acquire()
@@ -102,7 +145,26 @@ def _acquire_path_locks(paths: List[str]):
                 lock_path = f"{path}.sitool.lock"
                 fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o664)
                 try:
-                    fcntl.flock(fd, fcntl.LOCK_EX)
+                    if lock_timeout_s is None:
+                        fcntl.flock(fd, fcntl.LOCK_EX)
+                    else:
+                        deadline = time.monotonic() + float(lock_timeout_s)
+                        while True:
+                            try:
+                                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                                break
+                            except OSError as lock_exc:
+                                if lock_exc.errno not in (errno.EACCES, errno.EAGAIN):
+                                    raise
+                                remaining = float(deadline - time.monotonic())
+                                if remaining <= 0:
+                                    raise TimeoutError(
+                                        "Timed out waiting for file lock: "
+                                        f"{lock_path} (timeout={lock_timeout_s:.0f}s). "
+                                        "Another SITool process may still hold this lock. "
+                                        "Set SITOOL_PATH_LOCK_TIMEOUT_SECONDS=0 to disable timeout."
+                                    ) from lock_exc
+                                time.sleep(min(0.25, max(0.05, remaining)))
                 except Exception:
                     try:
                         os.close(fd)
@@ -128,6 +190,11 @@ def _acquire_path_locks(paths: List[str]):
 class DataPreprocessorBase:
     """Base preprocessor with shared IO/CDO setup helpers."""
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, eval_ex: str, module_name: str, hemisphere: str = None):
         """Initialize the data preprocessor.
 
@@ -158,10 +225,20 @@ class DataPreprocessorBase:
         self.temp_root = os.path.join(self.eval_dir, '_tmp')
         os.makedirs(self.temp_root, exist_ok=True)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_tempdir`.
+    # Purpose: Handle tempdir workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _tempdir(self, prefix: str):
         """Create a case-local temporary directory context."""
         return tempfile.TemporaryDirectory(prefix=prefix, dir=self.temp_root)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_new_cdo_instance`.
+    # Purpose: Handle new cdo instance workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _new_cdo_instance() -> Cdo:
         """Create a CDO instance for preprocessing.
@@ -188,6 +265,11 @@ class DataPreprocessorBase:
             opts.append('-f nc4')
         return Cdo(options=opts)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_xarray_monmean`.
+    # Purpose: Handle xarray monmean workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _xarray_monmean(input_file: str, output_file: str) -> None:
         """Fallback monthly mean computation with xarray."""
@@ -195,6 +277,11 @@ class DataPreprocessorBase:
             ds_mon = ds_in.resample(time='MS').mean(keep_attrs=True)
             utils.write_netcdf_compressed(ds_mon, output_file)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_xarray_seldate`.
+    # Purpose: Handle xarray seldate workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _xarray_seldate(input_file: str, output_file: str,
                         start_date: str, end_date: str) -> None:
@@ -203,6 +290,11 @@ class DataPreprocessorBase:
             ds_sel = ds_in.sel(time=slice(start_date, end_date))
             utils.write_netcdf_compressed(ds_sel, output_file)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_dataset_time_size`.
+    # Purpose: Handle dataset time size workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _dataset_time_size(path: str) -> Optional[int]:
         """Return time-axis length for one dataset; None if unavailable/unreadable."""
@@ -216,6 +308,11 @@ class DataPreprocessorBase:
         except Exception:
             return None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_is_nonempty_time_file`.
+    # Purpose: Handle is nonempty time file workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _is_nonempty_time_file(path: str) -> bool:
         """Return True when dataset exists and has non-empty time axis (or no time axis)."""
@@ -224,6 +321,11 @@ class DataPreprocessorBase:
         tsize = DataPreprocessorBase._dataset_time_size(path)
         return (tsize is None) or (tsize > 0)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_safe_monmean`.
+    # Purpose: Handle safe monmean workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _safe_monmean(self, cdo_obj: Cdo, input_file: str, output_file: str) -> None:
         """Run CDO monmean with xarray fallback on transient backend failures."""
         try:
@@ -232,6 +334,11 @@ class DataPreprocessorBase:
             logger.warning("CDO monmean failed (%s) — falling back to xarray.", cdo_err)
             self._xarray_monmean(os.path.abspath(input_file), output_file)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_safe_seldate`.
+    # Purpose: Handle safe seldate workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _safe_seldate(self, cdo_obj: Cdo, start_date: str, end_date: str,
                       input_file: str, output_file: str) -> None:
         """Run CDO seldate with xarray fallback on transient backend failures."""

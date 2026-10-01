@@ -1,0 +1,161 @@
+# ============================================================
+# SIToolv2 reference data preparation — user configuration
+#
+# Usage:
+#   python main.py --prep-ref
+#   python main.py --prep-ref --config cases/refdata_prep_user.yml
+#   python main.py --prep-ref --config cases/refdata_prep_user.yml --strict
+#
+# Edit ONLY the two paths and enable flags in the "User Settings"
+# section below.  The task definitions further down are pre-configured
+# for the standard directory layout and do not need to be changed.
+# ============================================================
+
+
+# ============================================================
+# USER SETTINGS — edit only this section
+# ============================================================
+
+# Root directory that contains all raw observational datasets.
+raw_data_root: /media/yafei/Data/Data/Observation
+
+# Output directory where the processed SIToolv2_RefData tree will be written.
+ref_data_dir: /media/yafei/Data/Data/SIToolv2_RefData_autotest
+
+# Per-dataset on/off switches.
+# Set a flag to false to skip that dataset entirely (no validation, no processing).
+enable:
+  NSIDC_SIconc:   true    # NSIDC CDR v5 sea-ice concentration (both hemispheres)
+  OSI_SIconc:     true    # OSI-450 v3p1 sea-ice concentration (both hemispheres)
+  NSIDC_SIdrift:  true    # NSIDC Polar Pathfinder sea-ice drift (both hemispheres)
+  OSI_SIdrift:    true    # OSI-455 v1 sea-ice drift (both hemispheres)
+  MPMR_SNdepth:   true    # MPMR passive-microwave snow depth (Antarctic)
+  CTOHv2_SNdepth: true    # CTOH v2.0 snow depth (both hemispheres)
+  SnowLG_SNdepth: true    # SnowModel-LG snow depth — NSIDC-0758 (Arctic)
+  CSBD_SIthick:   false    # CSBD CryoSat-2 sea-ice thickness (Arctic)
+  CTOHv2_SIthick: true    # CTOH v2.0 sea-ice thickness (both hemispheres)
+  GIOMAS_SIthick: false   # GIOMAS sea-ice thickness — set true if data available
+  TOPAZ_SIthick:  true    # TOPAZ4 sea-ice thickness (Arctic)
+  PIOMAS_SIthick: true    # PIOMAS sea-ice thickness (Arctic)
+
+
+# ============================================================
+# TASK DEFINITIONS — do not edit below this line
+# ============================================================
+#
+# Paths use ${raw_data_root} and ${ref_data_dir} defined above.
+# Each task carries an enable_key that is matched against the enable
+# flags above; tasks whose key is set to false are skipped.
+
+prep_tasks:
+
+  # ---- SIconc ----
+  - method: prep_NSIDC_SIconc
+    enable_key: NSIDC_SIconc
+    kwargs:
+      data_path: ${raw_data_root}/NSIDC/G02202_V5
+      hemisphere: nh
+
+  - method: prep_NSIDC_SIconc
+    enable_key: NSIDC_SIconc
+    kwargs:
+      data_path: ${raw_data_root}/NSIDC/G02202_V5
+      hemisphere: sh
+
+  - method: prep_OSI_SIconc
+    enable_key: OSI_SIconc
+    kwargs:
+      data_path: ${raw_data_root}/OSISAF/v3p1
+      hemisphere: nh
+
+  - method: prep_OSI_SIconc
+    enable_key: OSI_SIconc
+    kwargs:
+      data_path: ${raw_data_root}/OSISAF/v3p1
+      hemisphere: sh
+
+  # ---- SIdrift ----
+  - method: prep_NSIDC_SIdrift
+    enable_key: NSIDC_SIdrift
+    kwargs:
+      data_path: ${raw_data_root}/NSIDC/Polar_Pathfinder_sea_ice_motion
+      hemisphere: nh
+
+  - method: prep_NSIDC_SIdrift
+    enable_key: NSIDC_SIdrift
+    kwargs:
+      data_path: ${raw_data_root}/NSIDC/Polar_Pathfinder_sea_ice_motion
+      hemisphere: sh
+
+  - method: prep_OSI_SIdrift
+    enable_key: OSI_SIdrift
+    kwargs:
+      data_path: ${raw_data_root}/OSISAF/drift_lr
+      hemisphere: nh
+
+  - method: prep_OSI_SIdrift
+    enable_key: OSI_SIdrift
+    kwargs:
+      data_path: ${raw_data_root}/OSISAF/drift_lr
+      hemisphere: sh
+
+  # ---- SNdepth ----
+  - method: prep_MPMR_SNdepth
+    enable_key: MPMR_SNdepth
+    kwargs:
+      data_path: ${raw_data_root}/Snow_depth
+      grid_file: ${ref_data_dir}/Auxiliary/NSIDC0771_LatLon_PS_S25km_v1.0.nc
+
+  - method: prep_CTOHv2_SNdepth_cont
+    enable_key: CTOHv2_SNdepth
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/ctoh
+      hemisphere: nh
+
+  - method: prep_CTOHv2_SNdepth_cont
+    enable_key: CTOHv2_SNdepth
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/ctoh
+      hemisphere: sh
+
+  - method: prep_SnowLG_SNdepth
+    enable_key: SnowLG_SNdepth
+    kwargs:
+      data_path: ${raw_data_root}/Snow_depth/nsidc0758_lagrangian_snow_distributions_v01
+
+  # ---- SIthick ----
+  - method: prep_CSBD_SIthick
+    enable_key: CSBD_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/CSBD
+
+  - method: prep_CTOHv2_SIthick_cont
+    enable_key: CTOHv2_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/ctoh
+      hemisphere: nh
+
+  - method: prep_CTOHv2_SIthick_cont
+    enable_key: CTOHv2_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/ctoh
+      hemisphere: sh
+
+  - method: prep_GIOMAS_SIthick
+    enable_key: GIOMAS_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/GIOMAS
+
+  - method: prep_TOPAZ_SIthick
+    enable_key: TOPAZ_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/TOPAZ4
+
+  - method: prep_PIOMAS_SIthick
+    enable_key: PIOMAS_SIthick
+    kwargs:
+      data_path: ${raw_data_root}/Sea_ice_thickness/PIOMAS
+
+# Optional post-preparation diagnostics.
+quick_check_tasks: []
+quick_look_tasks: []

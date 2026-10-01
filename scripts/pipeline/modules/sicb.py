@@ -11,9 +11,15 @@ from scripts.pipeline.modules.common import (
     _check_outputs_exist,
     _load_plot_options,
     _plot_options_get_module,
+    _reuse_processed_inputs_for_recalculate,
 )
 
 
+# -----------------------------------------------------------------------------
+# Function: `eval_sicb`.
+# Purpose: Handle eval sicb workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def eval_sicb(case_name: str, recipe: RR.RecipeReader,
               data_dir: str, output_dir: str,
               recalculate: bool = False,
@@ -69,12 +75,24 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         logger.info(f"{module} evaluation skipped — all outputs exist.")
         return None
 
+    reuse_processed_inputs = _reuse_processed_inputs_for_recalculate(case_name, recalculate)
+    if recalculate and reuse_processed_inputs:
+        logger.info(
+            "%s recalculate mode: reusing existing processed inputs (no preprocess overwrite).",
+            module,
+        )
+
     cache_file = _get_metrics_cache_file(case_name, output_dir, hemisphere, module)
     preprocessor = PP.DataPreprocessor(case_name, module, hemisphere=recipe.hemisphere)
     grid_file = preprocessor.gen_eval_grid()
 
     metric = _get_metric(module_vars)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_new_sicb_metrics`.
+    # Purpose: Handle new sicb metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _new_sicb_metrics() -> SIM.SICBMetrics:
         """Build one SICBMetrics instance.
 
@@ -92,6 +110,11 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
     obs1_plot_label = obs_labels[0] if len(obs_labels) >= 1 else 'obs1'
     obs2_plot_label = obs_labels[1] if len(obs_labels) >= 2 else 'obs2'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_merge_obs_pair_name`.
+    # Purpose: Handle merge obs pair name workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _merge_obs_pair_name(index: int) -> str:
         sic_name = (
             str(obs_labels[index]).strip()
@@ -122,6 +145,11 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
     model_labels: List[str] = _get_recipe_model_labels(module, module_vars, len(module_vars.get('model_file_sic') or []))
     cache_loaded = False
 
+    # -----------------------------------------------------------------------------
+    # Function: `_derive_daily_budget_path`.
+    # Purpose: Handle derive daily budget path workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _derive_daily_budget_path(seas_path: Optional[str]) -> Optional[str]:
         if not seas_path:
             return None
@@ -134,6 +162,11 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         daily_path = str(p.with_name(daily_name))
         return daily_path if Path(daily_path).exists() else None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sicb_dataset_has_ridging`.
+    # Purpose: Handle sicb dataset has ridging workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _sicb_dataset_has_ridging(path: Optional[str], required_vars: List[str]) -> bool:
         if not path or (not Path(path).exists()):
             return False
@@ -146,12 +179,22 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         except Exception:
             return False
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sicb_payload_has_ridging`.
+    # Purpose: Handle sicb payload has ridging workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _sicb_payload_has_ridging(seas_path: Optional[str], daily_path: Optional[str]) -> bool:
         return (
             _sicb_dataset_has_ridging(seas_path, ['ridging_mask', 'sic_mean'])
             and _sicb_dataset_has_ridging(daily_path, ['ridging_ratio', 'sic'])
         )
 
+    # -----------------------------------------------------------------------------
+    # Function: `_budget_payload_to_paths`.
+    # Purpose: Handle budget payload to paths workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _budget_payload_to_paths(payload: Optional[dict]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         if not isinstance(payload, dict):
             return None, None, None
@@ -265,13 +308,18 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         if obs_parallel_workers > 1:
             obs_tasks = [('sic', '_sic'), ('sid', '_sidrift')]
 
+            # -----------------------------------------------------------------------------
+            # Function: `_obs_worker`.
+            # Purpose: Handle obs worker workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _obs_worker(obs_task: Tuple[str, str]) -> Dict[str, Any]:
                 obs_key, obs_flag = obs_task
                 out_files = preprocessor.prep_obs(
                     frequency='daily',
                     output_dir=data_dir,
                     flag_name=obs_flag,
-                    overwrite=bool(recalculate),
+                    overwrite=bool(recalculate and (not reuse_processed_inputs)),
                     jobs=max(1, int(obs_jobs_each)),
                 )
                 return {'obs_key': obs_key, 'files': out_files}
@@ -293,19 +341,19 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 frequency='daily',
                 output_dir=data_dir,
                 flag_name='_sic',
-                overwrite=bool(recalculate),
+                overwrite=bool(recalculate and (not reuse_processed_inputs)),
                 jobs=jobs,
             )
             obs_sid = preprocessor.prep_obs(
                 frequency='daily',
                 output_dir=data_dir,
                 flag_name='_sidrift',
-                overwrite=bool(recalculate),
+                overwrite=bool(recalculate and (not reuse_processed_inputs)),
                 jobs=jobs,
             )
         all_model_files = preprocessor.prep_models(
             file_groups, frequency='daily', output_dir=data_dir,
-            overwrite=bool(recalculate), jobs=model_prep_jobs
+            overwrite=bool(recalculate and (not reuse_processed_inputs)), jobs=model_prep_jobs
         ) if file_groups else []
         n_models = len(all_model_files) // 3
         model_sic_files = all_model_files[:n_models]
@@ -327,7 +375,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 output_folder=str(data_dir) + '/',
                 jobs=max(1, int(jobs)),
                 output_label=module_vars.get('ref_label', _sanitize_group_name(obs1_plot_label) or 'obs'),
-                reuse_existing=not bool(recalculate),
+                reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
             )
             obs_daily_file = _derive_daily_budget_path(obs_seas_file)
 
@@ -345,7 +393,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 output_folder=str(data_dir) + '/',
                 jobs=max(1, int(jobs)),
                 output_label=_sanitize_group_name(obs2_plot_label) or 'obs2',
-                reuse_existing=not bool(recalculate),
+                reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
             )
             obs2_daily_file = _derive_daily_budget_path(obs2_seas_file)
 
@@ -375,6 +423,11 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 hemisphere.upper(), model_workers, inner_budget_jobs, jobs,
             )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_worker`.
+            # Purpose: Handle worker workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _worker(task: Tuple[int, Tuple[str, str, str]]) -> Dict[str, Any]:
                 ii, (mf_sic, mf_u, mf_v) = task
                 label = model_labels[ii] if ii < len(model_labels) else f'model{ii + 1}'
@@ -396,7 +449,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     output_folder=str(data_dir) + '/',
                     jobs=max(1, int(inner_budget_jobs)),
                     output_label=label,
-                    reuse_existing=not bool(recalculate),
+                    reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
                 )
                 payload_file = stage_dir / f'model_{ii:04d}.pkl'
                 _save_pickle_atomic(payload_file, {
@@ -432,7 +485,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     output_folder=str(data_dir) + '/',
                     jobs=max(1, int(jobs)),
                     output_label=label,
-                    reuse_existing=not bool(recalculate),
+                    reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
                 )
                 model_seas_files.append(seas_file)
                 model_mon_clim_files.append(mon_clim)
@@ -537,7 +590,6 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
             logger.warning("Failed to reload %s cache for plotting (%s). Using in-memory payload.", module, exc)
 
     # Metric-level (post-diagnostic) group means built from SICB diagnostic files.
-    base_model_seas_files = list(model_seas_files)
     base_model_mon_clim_files = list(model_mon_clim_files)
     base_model_daily_files = list(model_daily_files)
     base_model_labels_for_group = list(model_labels)
@@ -631,7 +683,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
             obs_seas_file, hemisphere,
             vmin=budget_vmin, vmax=budget_vmax, cbtick_bin=budget_tick_bin,
             cm=budget_cmap,
-            fig_name=str(fig_dir / 'SICB_obs.png'),
+            fig_name=str(fig_dir / 'sicb_obs_map_raw.png'),
         )
 
         # Build combined lists including obs2 if available
@@ -644,11 +696,6 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
             model_labels_seas[ii] if ii < len(model_labels_seas) else f'model{ii + 1}'
             for ii in range(len(model_seas_files))
         ]
-        all_labels = (
-            [obs1_plot_label] +
-            ([obs2_plot_label] if obs2_seas_file else []) +
-            model_labels_used_seas
-        )
         all_labels_sicb2 = (
             [obs1_plot_label_sicb2] +
             ([obs2_plot_label_sicb2] if obs2_seas_file else []) +
@@ -681,7 +728,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 all_mon_clim, all_labels_mon, hemisphere,
                 line_style=line_styles, color=line_colors,
                 n_obs=(2 if obs2_mon_clim else 1),
-                fig_name=str(fig_dir / 'SICB_ts.png'),
+                fig_name=str(fig_dir / 'sicb_terms_ts_raw.png'),
             )
             if group_labels_mon:
                 group_mon_files = model_mon_clim_files[:len(group_labels_mon)]
@@ -692,7 +739,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     hemisphere,
                     line_style=line_styles, color=line_colors,
                     n_obs=(2 if obs2_mon_clim else 1),
-                    fig_name=str(fig_dir / 'SICB_ts_groupmean.png'),
+                    fig_name=str(fig_dir / 'sicb_terms_ts_groupmean_raw.png'),
                     group_member_files=group_member_map_mon,
                 )
 
@@ -718,7 +765,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 [p[0] for p in daily_pairs], [p[1] for p in daily_pairs], hemisphere,
                 line_style=line_styles, color=line_colors,
                 n_obs=(2 if obs2_daily_file and Path(obs2_daily_file).exists() else 1),
-                fig_name=str(fig_dir / 'SICB_ridging_ts.png'),
+                fig_name=str(fig_dir / 'sicb_ridging_ratio_ts_raw.png'),
             )
             # Ridging group-mean figure:
             # - Preferred: direct daily group-mean NetCDF files (if build succeeded).
@@ -764,7 +811,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                         [p[0] for p in group_pairs], [p[1] for p in group_pairs], hemisphere,
                         line_style=line_styles, color=line_colors,
                         n_obs=(2 if obs2_daily_file and Path(obs2_daily_file).exists() else 1),
-                        fig_name=str(fig_dir / 'SICB_ridging_ts_groupmean.png'),
+                        fig_name=str(fig_dir / 'sicb_ridging_ratio_ts_groupmean_raw.png'),
                         group_member_files=group_member_map_daily,
                     )
 
@@ -772,7 +819,7 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
             pf.plot_sic_region_map(
                 grid_nc_file=grid_file,
                 hms=hemisphere,
-                fig_name=str(fig_dir / 'SeaIceRegion_map.png'),
+                fig_name=str(fig_dir / 'geo_sector_map.png'),
             )
         except Exception as exc:
             logger.warning("Failed to generate sea-ice region map (%s).", exc)
@@ -803,12 +850,27 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
             '%',
         ]
 
+        # -----------------------------------------------------------------------------
+        # Function: `_fmt_total`.
+        # Purpose: Handle fmt total workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _fmt_total(v: float) -> str:
             return f"{v:.3f}" if np.isfinite(v) else 'NaN'
 
+        # -----------------------------------------------------------------------------
+        # Function: `_fmt_pct`.
+        # Purpose: Handle fmt pct workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _fmt_pct(v: float) -> str:
             return f"{v:.1f}%" if np.isfinite(v) else 'NaN'
 
+        # -----------------------------------------------------------------------------
+        # Function: `_build_seasonal_rows_for_sector`.
+        # Purpose: Handle build seasonal rows for sector workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _build_seasonal_rows_for_sector(
             sector: str,
             obs1_file: Optional[str],
@@ -818,6 +880,11 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         ) -> Dict[str, List[List[str]]]:
             season_rows = {s: [] for s in _season_order}
 
+            # -----------------------------------------------------------------------------
+            # Function: `_append_dataset_rows`.
+            # Purpose: Handle append dataset rows workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _append_dataset_rows(label: str, seas_file: str) -> None:
                 summary = sicb_metrics.summarize_seasonal_budget_table(
                     seas_clim_file=seas_file,

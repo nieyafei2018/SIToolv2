@@ -6,7 +6,14 @@ from scripts.pipeline import app as _app
 # Reuse runtime namespace (imports/constants/helpers) initialized in app.py.
 globals().update({k: v for k, v in _app.__dict__.items() if k not in globals()})
 
+_DEFAULT_PREP_REF_CONFIG = "cases/refdata_prep_user.yml"
 
+
+# -----------------------------------------------------------------------------
+# Function: `_configure_case_tmpdir`.
+# Purpose: Handle configure case tmpdir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _configure_case_tmpdir(case_dir: Path) -> Path:
     """Bind runtime temporary directories to case-local `_tmp` folder."""
     tmp_dir = case_dir / '_tmp'
@@ -21,6 +28,11 @@ def _configure_case_tmpdir(case_dir: Path) -> Path:
     return tmp_dir
 
 
+# -----------------------------------------------------------------------------
+# Function: `_cleanup_case_tmpdir`.
+# Purpose: Handle cleanup case tmpdir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _cleanup_case_tmpdir(case_tmp_dir: Path) -> None:
     """Remove case-local temporary directory unless explicitly preserved."""
     keep_tmp = str(os.environ.get('SITOOL_KEEP_TMP', '0')).strip().lower() in {
@@ -38,6 +50,11 @@ def _cleanup_case_tmpdir(case_tmp_dir: Path) -> None:
         logger.warning("Failed to remove case temporary directory %s (%s).", case_tmp_dir, exc)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_eval_hms_with_override`.
+# Purpose: Handle resolve eval hms with override workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_eval_hms_with_override(recipe_hms: List[str]) -> List[str]:
     """Resolve effective eval_hms with optional environment override.
 
@@ -81,6 +98,75 @@ def _resolve_eval_hms_with_override(recipe_hms: List[str]) -> List[str]:
     return selected
 
 
+# -----------------------------------------------------------------------------
+# Function: `_run_prep_ref`.
+# Purpose: Dispatch the --prep-ref CLI command to the refdata runner.
+# -----------------------------------------------------------------------------
+def _run_prep_ref(config_path: str, strict: bool, log_level: str,
+                  jobs: int = 1, inner_jobs: int = 1) -> None:
+    """Dispatch the --prep-ref command to the refdata runner.
+
+    ``scripts/__init__.py`` sets TMPDIR to ``os.getcwd()`` (the project root)
+    when neither ``SITOOL_TMPDIR`` nor ``TMPDIR`` is set.  That is appropriate
+    for the eval pipeline but wrong for CDO-heavy preprocessing, which needs a
+    writable scratch area with no naming collisions.  Redirect to a dedicated
+    temp directory under the system default before running any CDO operations,
+    then restore the original environment on exit.
+    """
+    import shutil
+    import tempfile as _tempfile
+    from scripts.preprocess.refdata.runner import run_from_config, _load_config
+
+    level = getattr(logging, log_level.upper(), logging.INFO)
+
+    # Resolve ref_data_dir from the config so we can place the log file there.
+    log_file = None
+    try:
+        _cfg = _load_config(config_path)
+        ref_data_dir = str(_cfg.get("ref_data_dir") or "").strip()
+        if ref_data_dir:
+            Path(ref_data_dir).mkdir(parents=True, exist_ok=True)
+            log_file = str(Path(ref_data_dir) / "prep_ref.log")
+    except Exception:
+        pass
+
+    setup_logging(level, log_file=log_file)
+
+    # Save current TMPDIR state so we can restore it afterward.
+    _saved_env = {k: os.environ.get(k) for k in ("TMPDIR", "TEMP", "TMP")}
+    _saved_tempdir = _tempfile.tempdir
+
+    # Create a dedicated scratch directory using the OS default (/tmp on Linux).
+    # Pass dir=None so tempfile falls back to the real OS default, bypassing
+    # whatever SITOOL has set in the module-level tempfile.tempdir.
+    prep_tmp = _tempfile.mkdtemp(prefix="sitool_prepref_", dir="/tmp")
+    try:
+        for key in ("TMPDIR", "TEMP", "TMP"):
+            os.environ[key] = prep_tmp
+        _tempfile.tempdir = prep_tmp
+
+        logger.info(
+            "SIToolv2 --prep-ref: config=%s strict=%s tmpdir=%s",
+            config_path, strict, prep_tmp,
+        )
+        run_from_config(config_path, strict=strict, jobs=jobs, inner_jobs=inner_jobs)
+
+    finally:
+        # Restore TMPDIR so any code running after this is unaffected.
+        for key, val in _saved_env.items():
+            if val is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = val
+        _tempfile.tempdir = _saved_tempdir
+        shutil.rmtree(prep_tmp, ignore_errors=True)
+
+
+# -----------------------------------------------------------------------------
+# Function: `main`.
+# Purpose: Handle main workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def main() -> None:
     """Parse CLI arguments and run the requested evaluation modules."""
     parser = argparse.ArgumentParser(
@@ -88,7 +174,51 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument('case_name', help='Evaluation case name (matches recipe_<case_name>.yml)')
+
+    # Mode selector (mutually exclusive).
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument(
+        '--eval',
+        dest='eval_case',
+        metavar='CASE',
+        help='Run evaluation for CASE (matches cases/recipe_<CASE>.yml).',
+    )
+    mode_group.add_argument(
+        '--prep-ref',
+        action='store_true',
+        dest='prep_ref',
+        help='Prepare raw reference data into a complete SIToolv2_RefData folder.',
+    )
+
+    # Positional case_name kept for backward compatibility.
+    parser.add_argument(
+        'case_name',
+        nargs='?',
+        help=(
+            'Evaluation case name — deprecated positional form of --eval. '
+            'Prefer: python main.py --eval <case>'
+        ),
+    )
+
+    # --prep-ref options.
+    parser.add_argument(
+        '--config',
+        default=_DEFAULT_PREP_REF_CONFIG,
+        metavar='PATH',
+        help=(
+            f'YAML config for --prep-ref (default: {_DEFAULT_PREP_REF_CONFIG}).'
+        ),
+    )
+    parser.add_argument(
+        '--strict',
+        action='store_true',
+        help=(
+            'With --prep-ref: abort on any path-validation failure instead of '
+            'skipping the bad dataset and continuing.'
+        ),
+    )
+
+    # --eval / positional options.
     parser.add_argument(
         '--modules', nargs='+', choices=ALL_MODULES, metavar='MODULE',
         help='Modules to evaluate (default: all enabled in recipe)',
@@ -114,16 +244,43 @@ def main() -> None:
         help='Total parallel worker threads. Safe options are logged at runtime (default: 1).',
     )
     parser.add_argument(
+        '-J', '--inner-jobs', type=int, default=1, metavar='M',
+        dest='inner_jobs',
+        help=(
+            '--prep-ref only: threads per task for intra-task loops '
+            '(OSI SIconc year loop, MPMR year loop, NSIDC SIconc file loop).  Default: 1.'
+        ),
+    )
+    parser.add_argument(
         '--keep-staging', action='store_true',
         help='Keep per-run staging artifacts under cases/<case>/metrics/_staging.',
     )
     args = parser.parse_args()
 
+    # ---- Dispatch --prep-ref mode ----
+    if args.prep_ref:
+        _run_prep_ref(args.config, strict=args.strict, log_level=args.log_level,
+                      jobs=args.jobs, inner_jobs=args.inner_jobs)
+        return
+
+    # ---- Resolve case name for --eval / positional ----
+    case_name: str = args.eval_case or args.case_name or ""
+    if not case_name:
+        parser.error("Specify a case: --eval <case>  OR  python main.py <case>")
+    if args.case_name and not args.eval_case:
+        logger.warning(
+            "Positional case_name '%s' is deprecated. "
+            "Use: python main.py --eval %s",
+            case_name, case_name,
+        )
+    # Inject case_name back so the rest of the function can use args.case_name uniformly.
+    args.case_name = case_name
+
     case_dir = _resolve_case_run_dir(args.case_name, log_warning=False)
     os.environ['SITOOL_CASE_RUN_DIR'] = str(case_dir)
     case_tmp_dir = _configure_case_tmpdir(case_dir)
     os.environ['SITOOL_LOG_LEVEL'] = str(args.log_level).upper()
-    log_file = str(case_dir / f'{args.case_name}.log')
+    log_file = str(case_dir / 'Output' / f'{args.case_name}.log')
     setup_logging(getattr(logging, args.log_level), log_file=log_file)
     preferred_case_dir = Path('cases') / args.case_name
     if case_dir != preferred_case_dir:
@@ -202,7 +359,7 @@ def main() -> None:
             case_name=args.case_name,
             run_id=run_id,
         )
-        logger.info("Real CPU utilization trace enabled: %s", cpu_trace_file)
+        logger.info("Real CPU/memory utilization trace enabled: %s", cpu_trace_file)
     else:
         rte.disable_trace()
 
@@ -228,10 +385,15 @@ def main() -> None:
     cpu_fig_export_index = 0
     if enable_cpu_trace:
         logger.info(
-            "Periodic CPU utilization figure export enabled: every %.0fs (overwrite latest figure).",
+            "Periodic CPU/memory utilization figure export enabled: every %.0fs (overwrite latest figure).",
             cpu_fig_interval_seconds,
         )
 
+    # -----------------------------------------------------------------------------
+    # Function: `_maybe_export_cpu_figure`.
+    # Purpose: Handle maybe export cpu figure workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _maybe_export_cpu_figure(force: bool = False, reason: str = 'periodic') -> bool:
         nonlocal next_cpu_fig_export_ts, cpu_fig_export_index
         if not enable_cpu_trace or cpu_trace_file is None:
@@ -246,16 +408,17 @@ def main() -> None:
                 trace_file=cpu_trace_file,
                 output_png=eff_png,
                 output_csv=None,
-                chart_title=f'Real CPU Utilization ({args.case_name})',
+                chart_title=f'Real CPU & Memory Utilization ({args.case_name})',
+                memory_window_seconds=cpu_fig_interval_seconds,
             )
             cpu_fig_export_index += 1
             logger.info(
-                "Real CPU utilization figure (%s #%d): %s",
+                "Real CPU/memory utilization figure (%s #%d): %s",
                 reason, cpu_fig_export_index, eff_png,
             )
             return True
         except Exception as exc:
-            logger.warning("Failed to export %s real CPU utilization figure (%s).", reason, exc)
+            logger.warning("Failed to export %s real CPU/memory utilization figure (%s).", reason, exc)
             return False
         finally:
             while next_cpu_fig_export_ts <= now_mono:
@@ -442,6 +605,11 @@ def main() -> None:
             max_sicb_parallel, sicb_jobs_cap, sidrift_jobs_cap, simbudget_jobs_cap, core_jobs_cap,
         )
 
+        # -----------------------------------------------------------------------------
+        # Function: `_can_dispatch`.
+        # Purpose: Handle can dispatch workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _can_dispatch(task: Tuple[str, str], running_info: Dict[Any, Dict[str, Any]]) -> bool:
             _hms, module_name = task
             if module_name == 'SICB':
@@ -453,6 +621,11 @@ def main() -> None:
                     return False
             return True
 
+        # -----------------------------------------------------------------------------
+        # Function: `_has_dispatchable_pending`.
+        # Purpose: Handle has dispatchable pending workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _has_dispatchable_pending(running_info: Dict[Any, Dict[str, Any]]) -> bool:
             for task in list(pending_tasks):
                 if _can_dispatch(task, running_info):
@@ -493,9 +666,26 @@ def main() -> None:
                     )
                     weighted_base_jobs = base_jobs
                     if aggressive_parallel:
+                        # Weight multipliers control how many jobs each module receives
+                        # relative to the base allocation (selected_jobs / target_parallel_tasks).
+                        #
+                        # SICB is the critical-path module: its preprocessing serialises over
+                        # 42 model-file groups and easily becomes the wall-clock bottleneck.
+                        # Raising its weight from 1.50 → 3.00 triples its initial job budget
+                        # (e.g. 3 base × 3.0 = 9 jobs with -j 36 / 12 tasks), allowing
+                        # 9 model groups to preprocess in parallel instead of 5.  Combined
+                        # with the segment-rebalance bug-fix in obs_model.py this cuts SICB
+                        # preprocessing from ~21 sequential rounds down to ~5.
+                        #
+                        # SIdrift weight raised from 1.25 → 2.00: vector-correlation per
+                        # model is single-threaded, so more jobs means more models evaluated
+                        # in parallel, reducing the overall SIdrift wall-clock.
+                        #
+                        # Light modules (SIconc, SIthick, SNdepth) keep weight 1.0; they
+                        # finish quickly regardless and don't benefit from extra threads.
                         weight_map = {
-                            'SICB': 1.50,
-                            'SIdrift': 1.25,
+                            'SICB': 3.00,     # preprocessing-heavy; was 1.50
+                            'SIdrift': 2.00,  # model-parallel vector corr; was 1.25
                             'SItrans': 1.25,
                             'SIMbudget': 1.20,
                             'SNMbudget': 1.20,
@@ -520,8 +710,12 @@ def main() -> None:
                     if aggressive_parallel:
                         if module_name == 'SICB':
                             min_dispatch_jobs = 2
-                        elif module_name in {'SIdrift', 'SItrans', 'SIMbudget', 'SNMbudget'}:
+                        elif module_name in {'SIdrift', 'SIMbudget', 'SNMbudget'}:
                             min_dispatch_jobs = 2
+                        elif module_name == 'SItrans':
+                            # SItrans is cheap (~13 min); allow dispatch with 1 job so it
+                            # is never blocked waiting for SICB/SIdrift to free slots.
+                            min_dispatch_jobs = 1
                         elif module_name in {'SIconc', 'SIthick', 'SNdepth'}:
                             min_dispatch_jobs = 1
                     if module_jobs < min_dispatch_jobs and running:

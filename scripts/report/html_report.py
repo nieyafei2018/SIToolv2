@@ -2,6 +2,7 @@
 """HTML report builders for SIToolv2."""
 
 import glob
+import html as _html
 import json
 import logging
 import os
@@ -17,6 +18,11 @@ _INVALID_XML_CHARS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f]')
 _INVALID_SHEET_CHARS = re.compile(r'[:\\/*?\[\]]')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_clean_xml_text`.
+# Purpose: Handle clean xml text workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _clean_xml_text(value: object) -> str:
     """Return XML-safe UTF-8 text for worksheet inline strings."""
     text = '' if value is None else str(value)
@@ -24,6 +30,11 @@ def _clean_xml_text(value: object) -> str:
     return _xml_escape(text)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_excel_col_name`.
+# Purpose: Handle excel col name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _excel_col_name(col_idx_1based: int) -> str:
     """Convert 1-based column index to Excel letters (1->A, 27->AA)."""
     n = int(col_idx_1based)
@@ -36,6 +47,11 @@ def _excel_col_name(col_idx_1based: int) -> str:
     return ''.join(reversed(out))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_safe_sheet_name`.
+# Purpose: Handle safe sheet name workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _safe_sheet_name(name: str, used: set) -> str:
     """Create a unique Excel sheet name (<=31 chars, invalid chars removed)."""
     base = _INVALID_SHEET_CHARS.sub('_', str(name or 'Sheet'))
@@ -54,6 +70,11 @@ def _safe_sheet_name(name: str, used: set) -> str:
     return candidate
 
 
+# -----------------------------------------------------------------------------
+# Function: `_worksheet_xml`.
+# Purpose: Handle worksheet xml workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _worksheet_xml(rows: List[List[object]]) -> str:
     """Build one worksheet XML using inline strings for all non-empty values."""
     parts = [
@@ -78,6 +99,11 @@ def _worksheet_xml(rows: List[List[object]]) -> str:
     return ''.join(parts)
 
 
+# -----------------------------------------------------------------------------
+# Function: `_write_simple_xlsx`.
+# Purpose: Handle write simple xlsx workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_simple_xlsx(xlsx_path: str, sheets: List[dict]) -> None:
     """Write a minimal XLSX workbook without third-party dependencies.
 
@@ -226,6 +252,11 @@ def _write_simple_xlsx(xlsx_path: str, sheets: List[dict]) -> None:
             zf.writestr(f'xl/worksheets/sheet{s["id"]}.xml', _worksheet_xml(s['rows']))
 
 
+# -----------------------------------------------------------------------------
+# Function: `generate_html_report`.
+# Purpose: Handle generate html report workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def generate_html_report(case_name: str, output_dir: str,
                          modules_run: list,
                          metric_tables: dict = None,
@@ -257,20 +288,93 @@ def generate_html_report(case_name: str, output_dir: str,
     _xlsx_cache = {}
 
     from scripts.report.cross_module_data import build_cross_module_payload
+    from scripts.report.metric_formula_data import METRIC_FORMULA_PAGE
 
     cross_payload = build_cross_module_payload(metric_tables or {})
     cross_records = cross_payload.get('records', []) if isinstance(cross_payload, dict) else []
-    cross_payload_inline_json = ''
     cross_json_path = os.path.join(output_dir, 'cross_module_metrics.json')
-    try:
-        cross_payload_compact = json.dumps(cross_payload, ensure_ascii=False, separators=(',', ':'))
-        with open(cross_json_path, 'w', encoding='utf-8') as _fcm:
-            _fcm.write(cross_payload_compact)
-        cross_payload_inline_json = cross_payload_compact.replace('</', '<\\/')
-    except Exception as exc:
-        logger.warning("Failed to write cross-module payload JSON (%s).", exc)
-        cross_records = []
-        cross_payload_inline_json = '{"schema_version":"cross-module-v1","records":[],"catalog":{}}'
+    cross_js_payload_path = os.path.join(output_dir, 'cross_module_metrics.js')
+    cross_record_fields = [
+        'hemisphere',
+        'module',
+        'region',
+        'coverage_mode',
+        'view_mode',
+        'domain_kind',
+        'domain_key',
+        'metric_short_label',
+        'metric_code',
+        'dataset_name',
+        'dataset_type',
+        'dataset_obs_kind',
+        'value',
+    ]
+
+    # -----------------------------------------------------------------------------
+    # Function: `_compact_cross_payload`.
+    # Purpose: Handle compact cross payload workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _compact_cross_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Build compact cross-module payload: field schema + row arrays."""
+        records_in = payload.get('records', []) if isinstance(payload, dict) else []
+        rows: List[List[Any]] = []
+        for rec in records_in:
+            if not isinstance(rec, dict):
+                continue
+            obs_kind = str(rec.get('dataset_obs_kind', '')).strip().lower()
+            if obs_kind not in {'obs1', 'obs2'}:
+                obs_kind = ''
+            dataset_type = str(rec.get('dataset_type', 'model')).strip().lower()
+            if dataset_type not in {'obs', 'group'}:
+                dataset_type = 'model'
+            row = [
+                str(rec.get('hemisphere', '') or ''),
+                str(rec.get('module', '') or ''),
+                str(rec.get('region', '') or ''),
+                str(rec.get('coverage_mode', '') or ''),
+                str(rec.get('view_mode', '') or ''),
+                str(rec.get('domain_kind', '') or ''),
+                str(rec.get('domain_key', '') or ''),
+                str(rec.get('metric_short_label', rec.get('metric_name', '')) or ''),
+                str(rec.get('metric_code', rec.get('metric_id', rec.get('metric_name', ''))) or ''),
+                str(rec.get('dataset_name', '') or ''),
+                dataset_type,
+                obs_kind,
+                rec.get('value'),
+            ]
+            rows.append(row)
+        return {
+            'schema_version': str(payload.get('schema_version', 'cross-module-v3') if isinstance(payload, dict) else 'cross-module-v3'),
+            'schema_format': 'field-array-v1',
+            'generated_at': str(payload.get('generated_at', '') if isinstance(payload, dict) else ''),
+            'record_fields': list(cross_record_fields),
+            'records': rows,
+            'catalog': payload.get('catalog', {}) if isinstance(payload, dict) else {},
+        }
+
+    # -----------------------------------------------------------------------------
+    # Function: `_write_cross_payload`.
+    # Purpose: Handle write cross payload workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _write_cross_payload(payload: Dict[str, Any]) -> bool:
+        """Serialize compact cross-module payload to external JSON/JS files."""
+        try:
+            payload_compact = json.dumps(payload, ensure_ascii=False, separators=(',', ':'))
+            with open(cross_json_path, 'w', encoding='utf-8') as _fcm:
+                _fcm.write(payload_compact)
+            try:
+                payload_js_data = payload_compact.replace('</', '<\\/')
+                payload_js = f'window.__SITOOL_CROSS_PAYLOAD__={payload_js_data};\n'
+                with open(cross_js_payload_path, 'w', encoding='utf-8') as _fcj:
+                    _fcj.write(payload_js)
+            except Exception as exc:
+                logger.warning("Failed to write cross-module payload JS mirror (%s).", exc)
+            return True
+        except Exception as exc:
+            logger.warning("Failed to write cross-module payload JSON (%s).", exc)
+            return False
 
     cross_hms_has_data = {'nh': False, 'sh': False}
     for rec in cross_records:
@@ -278,6 +382,11 @@ def generate_html_report(case_name: str, output_dir: str,
         if hms in cross_hms_has_data:
             cross_hms_has_data[hms] = True
 
+    # -----------------------------------------------------------------------------
+    # Function: `_obs_placeholder`.
+    # Purpose: Handle obs placeholder workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _obs_placeholder(value: Any, obs_key: str) -> bool:
         txt = str(value if value is not None else '').strip().lower()
         if not txt:
@@ -287,6 +396,11 @@ def generate_html_report(case_name: str, output_dir: str,
         placeholders = {key, key.replace('obs', 'observation')}
         return compact in placeholders
 
+    # -----------------------------------------------------------------------------
+    # Function: `_infer_obs_name_from_ref_file`.
+    # Purpose: Handle infer obs name from ref file workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _infer_obs_name_from_ref_file(ref_file: Any) -> str:
         stem = os.path.splitext(os.path.basename(str(ref_file if ref_file is not None else '')))[0]
         parts = [p for p in stem.split('_') if p]
@@ -313,6 +427,11 @@ def generate_html_report(case_name: str, output_dir: str,
             picked = [parts[0]]
         return '_'.join(picked).strip('_')
 
+    # -----------------------------------------------------------------------------
+    # Function: `_merge_unique`.
+    # Purpose: Handle merge unique workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _merge_unique(tokens: List[str]) -> List[str]:
         out: List[str] = []
         seen = set()
@@ -327,6 +446,11 @@ def generate_html_report(case_name: str, output_dir: str,
             out.append(txt)
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_infer_module_obs_labels`.
+    # Purpose: Handle infer module obs labels workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _infer_module_obs_labels(module_cfg: Dict[str, Any], hms: str) -> Dict[str, str]:
         ref_lists: List[List[Any]] = []
         for k, v in (module_cfg or {}).items():
@@ -389,9 +513,19 @@ def generate_html_report(case_name: str, output_dir: str,
         logger.warning("Failed to parse module obs_names in recipe_%s.yml (%s).", case_name, exc)
     obs_name_map_inline_json = json.dumps(obs_name_map, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
 
+    # -----------------------------------------------------------------------------
+    # Function: `_canon_name`.
+    # Purpose: Handle canon name workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _canon_name(name: Any) -> str:
         return re.sub(r'[^a-z0-9]+', '', str(name if name is not None else '').lower())
 
+    # -----------------------------------------------------------------------------
+    # Function: `_name_candidates`.
+    # Purpose: Handle name candidates workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _name_candidates(name: Any) -> List[str]:
         base = str(name if name is not None else '').strip()
         if not base:
@@ -410,6 +544,11 @@ def generate_html_report(case_name: str, output_dir: str,
 
     _obs_kind_cache: Dict[tuple, Dict[str, str]] = {}
 
+    # -----------------------------------------------------------------------------
+    # Function: `_record_obs_kind`.
+    # Purpose: Handle record obs kind workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _record_obs_kind(module_name: Any, hemisphere: Any, dataset_name: Any) -> str:
         mod_key = str(module_name if module_name is not None else '')
         hms_key = str(hemisphere if hemisphere is not None else '').lower()
@@ -436,6 +575,7 @@ def generate_html_report(case_name: str, output_dir: str,
             return ''
         return kind_map.get(ds_canon, '')
 
+    cross_payload_write_ok = False
     # Re-tag concrete observation names (e.g., NSIDC/OSI) in cross-module payload.
     if isinstance(cross_payload, dict) and isinstance(cross_records, list):
         for rec in cross_records:
@@ -456,14 +596,25 @@ def generate_html_report(case_name: str, output_dir: str,
                 else:
                     rec['dataset_type'] = 'obs' if base_type == 'obs' else 'model'
                 rec.pop('dataset_obs_kind', None)
-        try:
-            cross_payload_compact = json.dumps(cross_payload, ensure_ascii=False, separators=(',', ':'))
-            with open(cross_json_path, 'w', encoding='utf-8') as _fcm:
-                _fcm.write(cross_payload_compact)
-            cross_payload_inline_json = cross_payload_compact.replace('</', '<\\/')
-        except Exception as exc:
-            logger.warning("Failed to refresh cross-module payload JSON with observation typing (%s).", exc)
+        cross_payload_compact = _compact_cross_payload(cross_payload)
+        cross_payload_write_ok = _write_cross_payload(cross_payload_compact)
+    if not cross_payload_write_ok:
+        cross_records = []
+        fallback_payload = {
+            'schema_version': 'cross-module-v3',
+            'schema_format': 'field-array-v1',
+            'generated_at': '',
+            'record_fields': list(cross_record_fields),
+            'records': [],
+            'catalog': {},
+        }
+        _write_cross_payload(fallback_payload)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_slug_token`.
+    # Purpose: Handle slug token workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _slug_token(value: object) -> str:
         text = str(value if value is not None else '').strip()
         text = re.sub(r'\s+', '_', text)
@@ -471,6 +622,11 @@ def generate_html_report(case_name: str, output_dir: str,
         text = text.strip('_.')
         return text or 'x'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_sheet_rows`.
+    # Purpose: Handle sheet rows workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _sheet_rows(headers: list, units: list, rows: list) -> List[List[object]]:
         out: List[List[object]] = []
         out.append([str(v) for v in (headers or [])])
@@ -479,6 +635,11 @@ def generate_html_report(case_name: str, output_dir: str,
             out.append([('' if v is None else str(v)) for v in row])
         return out
 
+    # -----------------------------------------------------------------------------
+    # Function: `_emit_xlsx`.
+    # Purpose: Handle emit xlsx workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _emit_xlsx(file_tokens: List[object], sheets: List[dict]) -> str:
         # Keep call sites intact but switch to on-demand browser-side export.
         # No workbook files are pre-generated on disk.
@@ -488,6 +649,11 @@ def generate_html_report(case_name: str, output_dir: str,
         _xlsx_cache[key] = ''
         return ''
 
+    # -----------------------------------------------------------------------------
+    # Function: `_download_controls`.
+    # Purpose: Handle download controls workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _download_controls(single_href: str, all_href: str) -> str:
         all_link = all_href or single_href
         return (
@@ -505,12 +671,104 @@ def generate_html_report(case_name: str, output_dir: str,
 
     GEO_SECTOR_MODULE = 'GeographicalSector'
     GEO_SECTOR_LABEL = 'Geographical sector'
+    METRIC_DOC_MODULE = 'MetricFormula'
+    METRIC_DOC_LABEL = 'Metrics & Formula'
     CROSS_MODULE = 'CrossModule'
     CROSS_MODULE_LABEL = 'Cross-Module'
 
+    # -----------------------------------------------------------------------------
+    # Function: `_is_sector_map_image`.
+    # Purpose: Handle is sector map image workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _is_sector_map_image(file_name: str) -> bool:
         canon = re.sub(r'[^a-z0-9]+', '', str(file_name).lower())
         return canon in {'seaiceregionmappng', 'geosectormappng'}
+
+    # -----------------------------------------------------------------------------
+    # Function: `_is_aux_module`.
+    # Purpose: Handle is aux module workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _is_aux_module(module_name: str) -> bool:
+        return str(module_name) in {GEO_SECTOR_MODULE, METRIC_DOC_MODULE}
+
+    # -----------------------------------------------------------------------------
+    # Function: `_default_module`.
+    # Purpose: Handle default module workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _default_module(modules: List[str]) -> str:
+        return next((mm for mm in modules if not _is_aux_module(mm)), (modules[0] if modules else ''))
+
+    # -----------------------------------------------------------------------------
+    # Function: `_render_metric_formula_page`.
+    # Purpose: Handle render metric formula page workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _render_metric_formula_page() -> str:
+        page = METRIC_FORMULA_PAGE if isinstance(METRIC_FORMULA_PAGE, dict) else {}
+        page_title = _html.escape(str(page.get('title', 'Metric Glossary & Formulas')))
+        intro = page.get('intro', [])
+        sections = page.get('sections', [])
+
+        intro_html = ''
+        for para in intro if isinstance(intro, list) else []:
+            txt = _html.escape(str(para if para is not None else '').strip())
+            if txt:
+                intro_html += f'          <p class="metric-doc-intro">{txt}</p>\n'
+
+        sections_html = ''
+        for sec in sections if isinstance(sections, list) else []:
+            if not isinstance(sec, dict):
+                continue
+            sec_title = _html.escape(str(sec.get('title', '')).strip() or 'Section')
+            paragraphs = sec.get('paragraphs', [])
+            blocks = sec.get('formula_blocks', [])
+
+            para_html = ''
+            for para in paragraphs if isinstance(paragraphs, list) else []:
+                txt = _html.escape(str(para if para is not None else '').strip())
+                if txt:
+                    para_html += f'            <p class="metric-doc-text">{txt}</p>\n'
+
+            blocks_html = ''
+            for block in blocks if isinstance(blocks, list) else []:
+                if not isinstance(block, dict):
+                    continue
+                block_name = _html.escape(str(block.get('name', '')).strip() or 'Formula')
+                equation = _html.escape(str(block.get('equation', '')).strip())
+                notes = block.get('notes', [])
+                notes_html = ''
+                for note in notes if isinstance(notes, list) else []:
+                    n_txt = _html.escape(str(note if note is not None else '').strip())
+                    if n_txt:
+                        notes_html += f'                <li>{n_txt}</li>\n'
+                blocks_html += (
+                    f'            <article class="formula-card">\n'
+                    f'              <h4>{block_name}</h4>\n'
+                    f'              <pre class="formula-eq">{equation}</pre>\n'
+                    f'              <ul class="formula-notes">\n'
+                    f'{notes_html}'
+                    f'              </ul>\n'
+                    f'            </article>\n'
+                )
+
+            sections_html += (
+                f'          <section class="metric-doc-block">\n'
+                f'            <h3>{sec_title}</h3>\n'
+                f'{para_html}'
+                f'{blocks_html}'
+                f'          </section>\n'
+            )
+
+        return (
+            f'        <section class="metrics-section metric-doc-section">\n'
+            f'          <h3 class="section-title">{page_title}</h3>\n'
+            f'{intro_html}'
+            f'{sections_html}'
+            f'        </section>\n'
+        )
 
     # --- Collect PNG images grouped by hemisphere → module ---
     hms_module_images: dict = {}
@@ -539,11 +797,15 @@ def generate_html_report(case_name: str, output_dir: str,
 
     hms_nav_modules: dict = {}
     for hms, _ in ALL_HMS:
-        nav_modules = list(hms_module_images.get(hms, {}).keys())
+        module_nav = list(hms_module_images.get(hms, {}).keys())
+        nav_modules: List[str] = []
         if hms_sector_map.get(hms):
-            nav_modules = [GEO_SECTOR_MODULE] + nav_modules
+            nav_modules.append(GEO_SECTOR_MODULE)
+        if module_nav or hms_sector_map.get(hms) or cross_hms_has_data.get(hms):
+            nav_modules.append(METRIC_DOC_MODULE)
+        nav_modules.extend(module_nav)
         if cross_hms_has_data.get(hms):
-            nav_modules = nav_modules + [CROSS_MODULE]
+            nav_modules.append(CROSS_MODULE)
         hms_nav_modules[hms] = nav_modules
 
     # Determine which hemisphere tab to show on load: caller's preference,
@@ -553,14 +815,23 @@ def generate_html_report(case_name: str, output_dir: str,
             (hms for hms, mods in hms_nav_modules.items() if mods), 'nh'
         )
 
+    # -----------------------------------------------------------------------------
+    # Function: `_fmt_col`.
+    # Purpose: Handle fmt col workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _fmt_col(h: str) -> str:
-        """Preserve known acronyms; title-case everything else."""
-        _ACRONYMS = {'mke', 'iiee', 'sie', 'sia', 'miz', 'pia', 'mae', 'rmse', 'std'}
-        return ' '.join(
-            w.upper() if w.lower() in _ACRONYMS else w.capitalize()
-            for w in h.replace('_', ' ').split()
-        )
+        """Render table header label with minimal normalization."""
+        txt = str(h if h is not None else '').strip()
+        if not txt:
+            return ''
+        return re.sub(r'\s+', ' ', txt.replace('_', ' '))
 
+    # -----------------------------------------------------------------------------
+    # Function: `_build_hms_pane`.
+    # Purpose: Handle build hms pane workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _build_hms_pane(hms: str, hms_label: str) -> str:
         """Return the full HTML for one hemisphere pane (nav sidebar + module panels)."""
         module_images = hms_module_images.get(hms, {})
@@ -578,13 +849,10 @@ def generate_html_report(case_name: str, output_dir: str,
 
         # Metric tables for this hemisphere from the nested dict
         tables = (metric_tables or {}).get(hms, {})
-        default_module = next(
-            (mm for mm in module_order if mm != GEO_SECTOR_MODULE),
-            (module_order[0] if module_order else ''),
-        )
+        default_module = _default_module(module_order)
         nav_html = '\n'.join(
             f'        <button class="nav-btn{" active" if (hms == active_hemisphere and m == default_module) else ""}" id="btn-{hms}-{m}" '
-            f'onclick="showMod(\'{hms}\',\'{m}\')">{(GEO_SECTOR_LABEL if m == GEO_SECTOR_MODULE else (CROSS_MODULE_LABEL if m == CROSS_MODULE else m))}</button>'
+            f'onclick="showMod(\'{hms}\',\'{m}\')">{(GEO_SECTOR_LABEL if m == GEO_SECTOR_MODULE else (METRIC_DOC_LABEL if m == METRIC_DOC_MODULE else (CROSS_MODULE_LABEL if m == CROSS_MODULE else m)))}</button>'
             for m in module_order
         )
 
@@ -619,6 +887,17 @@ def generate_html_report(case_name: str, output_dir: str,
                         f'        </section>\n'
                     )
 
+                panels_html += (
+                    f'        <div class="{panel_class}" id="tab-{hms}-{m}">\n'
+                    f'{panel_header}'
+                    f'{panel_content}'
+                    f'        </div>\n'
+                )
+                continue
+
+            if m == METRIC_DOC_MODULE:
+                panel_header = ''
+                panel_content = _render_metric_formula_page()
                 panels_html += (
                     f'        <div class="{panel_class}" id="tab-{hms}-{m}">\n'
                     f'{panel_header}'
@@ -709,18 +988,38 @@ def generate_html_report(case_name: str, output_dir: str,
             table_type = ''
             table_has_view_base = False
             table_has_view_matched = False
+            # -----------------------------------------------------------------------------
+            # Function: `_render_table_block`.
+            # Purpose: Handle render table block workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_table_block(headers: list, units: list, rows: list,
                                     highlight_dadt: bool = False,
                                     single_href: str = '',
                                     all_href: str = '') -> str:
+                # -----------------------------------------------------------------------------
+                # Function: `_normalize_dataset_label`.
+                # Purpose: Handle normalize dataset label workflow for the current execution path.
+                # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                # -----------------------------------------------------------------------------
                 def _normalize_dataset_label(label: object) -> object:
                     txt = '' if label is None else str(label).strip()
                     norm = re.sub(r'\s+', '', txt).lower()
                     txt_nobase = re.sub(r'\s*\(baseline\)\s*$', '', txt, flags=re.IGNORECASE).strip()
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_canon_name`.
+                    # Purpose: Handle canon name workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _canon_name(name: object) -> str:
                         return re.sub(r'[^a-z0-9]+', '', str(name if name is not None else '').lower())
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_name_candidates`.
+                    # Purpose: Handle name candidates workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _name_candidates(name: str) -> List[str]:
                         base = str(name if name is not None else '').strip()
                         if not base:
@@ -816,6 +1115,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          {dl_html}\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_table_markup`.
+            # Purpose: Handle render table markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_table_markup(table_payload: dict) -> str:
                 headers = table_payload.get('headers', [])
                 units = table_payload.get('units', [''] * len(headers))
@@ -829,6 +1133,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     all_href=str(table_payload.get('_dl_all', '')),
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_basic_table`.
+            # Purpose: Handle render basic table workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_basic_table(table_payload: dict, title: str = 'Scalar Metrics Summary',
                                     download_key: str = 'basic',
                                     sheet_name: str = 'Table',
@@ -859,6 +1168,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'        </section>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_normalize_region_payload`.
+            # Purpose: Handle normalize region payload workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _normalize_region_payload(region_payload: dict):
                 region_tables = region_payload.get('regions', {})
                 region_order = [
@@ -870,6 +1184,11 @@ def generate_html_report(case_name: str, output_dir: str,
                 region_labels = region_payload.get('region_labels', {})
                 return region_tables, region_order, region_labels
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_region_tables`.
+            # Purpose: Handle render region tables workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_region_tables(region_payload: dict, renderer,
                                       coverage_mode: Optional[str] = None,
                                       view_mode: Optional[str] = None,
@@ -909,6 +1228,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'        </section>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_region_seasonal_markup`.
+            # Purpose: Handle render region seasonal markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_region_seasonal_markup(payload: dict, region_key: str,
                                                coverage_mode: Optional[str] = None,
                                                view_mode: Optional[str] = None,
@@ -971,6 +1295,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'<div class="region-season-wrap">{season_tables_html}</div>'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_region_phase_payload`.
+            # Purpose: Handle render region phase payload workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_region_phase_payload(payload: dict, region_key: str,
                                              coverage_mode: Optional[str] = None,
                                              view_mode: Optional[str] = None) -> str:
@@ -1028,6 +1357,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'<div class="region-phase-wrap">{phase_tables_html}</div>'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_dual_section_ids`.
+            # Purpose: Handle dual section ids workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _dual_section_ids(payload: dict) -> List[str]:
                 if not isinstance(payload, dict):
                     return []
@@ -1041,6 +1375,11 @@ def generate_html_report(case_name: str, output_dir: str,
                         out.append(sid)
                 return out
 
+            # -----------------------------------------------------------------------------
+            # Function: `_dual_kind`.
+            # Purpose: Handle dual kind workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _dual_kind(payload: dict) -> str:
                 ids = set(_dual_section_ids(payload))
                 if 'diff' in ids:
@@ -1049,6 +1388,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     return 'coverage'
                 return ''
 
+            # -----------------------------------------------------------------------------
+            # Function: `_select_dual_section`.
+            # Purpose: Handle select dual section workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _select_dual_section(payload: dict, mode: str) -> Optional[dict]:
                 if not isinstance(payload, dict) or payload.get('type') != 'dual_table':
                     return None
@@ -1076,6 +1420,11 @@ def generate_html_report(case_name: str, output_dir: str,
                         return selected
                 return sections[0]
 
+            # -----------------------------------------------------------------------------
+            # Function: `_normalize_diff_rows`.
+            # Purpose: Handle normalize diff rows workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _normalize_diff_rows(rows: list, n_cols: int) -> List[List[object]]:
                 norm_rows: List[List[object]] = []
                 for row in rows or []:
@@ -1101,6 +1450,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     norm_rows = [['Baseline'] + ['0'] * max(col_count - 1, 0)]
                 return norm_rows
 
+            # -----------------------------------------------------------------------------
+            # Function: `_normalize_diff_payload`.
+            # Purpose: Handle normalize diff payload workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _normalize_diff_payload(payload: dict) -> dict:
                 if not isinstance(payload, dict):
                     return {}
@@ -1124,6 +1478,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     out['rows'] = _normalize_diff_rows(payload.get('rows', []), n_cols)
                 return out
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_top_view_tabs`.
+            # Purpose: Handle render top view tabs workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_top_view_tabs(group: str,
                                       coverage_mode: Optional[str] = None,
                                       active: bool = True,
@@ -1140,6 +1499,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_view_switch_block`.
+            # Purpose: Handle render view switch block workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_view_switch_block(raw_html: str, diff_html: str, group: str,
                                           coverage_mode: Optional[str] = None,
                                           title: str = 'Scalar Metrics Summary',
@@ -1158,6 +1522,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'        </section>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_region_payload_auto`.
+            # Purpose: Handle render region payload auto workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_region_payload_auto(payload: dict, region_key: str,
                                             coverage_mode: Optional[str] = None,
                                             view_mode: Optional[str] = None) -> str:
@@ -1257,6 +1626,11 @@ def generate_html_report(case_name: str, output_dir: str,
                             extra_html=extra_html,
                         )
                     elif kind == 'coverage':
+                        # -----------------------------------------------------------------------------
+                        # Function: `_render_coverage_payload`.
+                        # Purpose: Handle render coverage payload workflow for the current execution path.
+                        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                        # -----------------------------------------------------------------------------
                         def _render_coverage_payload(sec_payload: Optional[dict],
                                                      coverage_mode: str) -> tuple:
                             if not isinstance(sec_payload, dict):
@@ -1587,6 +1961,11 @@ def generate_html_report(case_name: str, output_dir: str,
                             if sample_kind:
                                 break
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_container_from_regions`.
+                    # Purpose: Handle container from regions workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _container_from_regions(regions_map: Dict[str, Any]) -> dict:
                         return {
                             'type': 'region_dual_table',
@@ -1595,6 +1974,11 @@ def generate_html_report(case_name: str, output_dir: str,
                             'regions': {rk: regions_map.get(rk, {}) for rk in region_order},
                         }
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_region_select_view`.
+                    # Purpose: Handle region select view workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _region_select_view(view_mode: str) -> dict:
                         selected: Dict[str, Any] = {}
                         for rk in region_order:
@@ -1605,6 +1989,11 @@ def generate_html_report(case_name: str, output_dir: str,
                                 selected[rk] = payload
                         return _container_from_regions(selected)
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_region_select_coverage`.
+                    # Purpose: Handle region select coverage workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _region_select_coverage(cov_mode: str) -> dict:
                         selected: Dict[str, Any] = {}
                         for rk in region_order:
@@ -1615,6 +2004,11 @@ def generate_html_report(case_name: str, output_dir: str,
                                 selected[rk] = payload
                         return _container_from_regions(selected)
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_container_has_view_dual`.
+                    # Purpose: Handle container has view dual workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _container_has_view_dual(container: dict) -> bool:
                         ctables, corder, _ = _normalize_region_payload(container)
                         for rk in corder:
@@ -1623,6 +2017,11 @@ def generate_html_report(case_name: str, output_dir: str,
                                 return True
                         return False
 
+                    # -----------------------------------------------------------------------------
+                    # Function: `_render_region_container`.
+                    # Purpose: Handle render region container workflow for the current execution path.
+                    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+                    # -----------------------------------------------------------------------------
                     def _render_region_container(container: dict,
                                                  coverage_mode: Optional[str],
                                                  group: str) -> str:
@@ -1816,37 +2215,34 @@ def generate_html_report(case_name: str, output_dir: str,
                 else:
                     tbl_section = _render_basic_table(t)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_plot_kind`.
+            # Purpose: Handle plot kind workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _plot_kind(img_path: str) -> str:
                 stem = os.path.splitext(os.path.basename(img_path))[0].lower()
-                if 'heat_map' in stem or 'heatmap' in stem:
+                tokens = [tok for tok in stem.replace('-', '_').split('_') if tok]
+                token_set = set(tokens)
+                if ('heatmap' in token_set) or ('heat' in token_set and 'map' in token_set):
                     return 'heatmap'
-                if 'relationship' in stem or 'scatter' in stem or 'regression' in stem:
+                if token_set.intersection({'relationship', 'scatter', 'regression'}):
                     return 'relationship'
-                if 'ranking' in stem or 'rank' in stem or 'skill' in stem or '_bar' in stem:
+                if token_set.intersection({'ranking', 'rank', 'bar'}):
                     return 'ranking'
-                line_tokens = (
-                    '_ts',
-                    'timeseries',
-                    '_ano',
-                    'iiee',
-                    'ridging_ts',
-                )
-                map_tokens = (
-                    '_map',
-                    'spatial',
-                    'climatology',
-                    'trend',
-                    'std',
-                    'bias',
-                    'advance',
-                    'retreat',
-                )
-                if any(tok in stem for tok in line_tokens):
+                if token_set.intersection({'ts', 'timeseries', 'series', 'ano', 'iiee'}):
                     return 'line'
-                if any(tok in stem for tok in map_tokens):
+                if token_set.intersection({'map', 'spatial', 'clim', 'climatology', 'trend', 'std', 'dstd', 'bias', 'advance', 'retreat'}):
+                    return 'map'
+                if 'skill' in token_set:
                     return 'map'
                 return 'other'
 
+            # -----------------------------------------------------------------------------
+            # Function: `_module_obs_display_names`.
+            # Purpose: Handle module obs display names workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _module_obs_display_names() -> tuple:
                 module_obs = obs_name_map.get(str(m), {}) if isinstance(obs_name_map, dict) else {}
                 hms_obs = module_obs.get(str(hms).lower(), {}) if isinstance(module_obs, dict) else {}
@@ -1854,6 +2250,11 @@ def generate_html_report(case_name: str, output_dir: str,
                 obs2_name = str(hms_obs.get('obs2', 'obs2')).strip() if isinstance(hms_obs, dict) else 'obs2'
                 return (obs1_name or 'obs1', obs2_name or 'obs2')
 
+            # -----------------------------------------------------------------------------
+            # Function: `_replace_obs_tokens`.
+            # Purpose: Handle replace obs tokens workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _replace_obs_tokens(text: str) -> str:
                 out = str(text if text is not None else '')
                 obs1_name, obs2_name = _module_obs_display_names()
@@ -1867,6 +2268,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     out = re.sub(pattern, replacement, out)
                 return out
 
+            # -----------------------------------------------------------------------------
+            # Function: `_fig_cards`.
+            # Purpose: Handle fig cards workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _fig_cards(img_list):
                 cards = []
                 for p in img_list:
@@ -1884,6 +2290,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     )
                 return '\n'.join(cards)
 
+            # -----------------------------------------------------------------------------
+            # Function: `_plot_kind_label`.
+            # Purpose: Handle plot kind label workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _plot_kind_label(kind: str) -> str:
                 return {
                     'line': 'Time Series',
@@ -1894,6 +2305,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     'other': 'Other Plots',
                 }.get(kind, 'Plots')
 
+            # -----------------------------------------------------------------------------
+            # Function: `_bucket_plot_kinds`.
+            # Purpose: Handle bucket plot kinds workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _bucket_plot_kinds(img_list: List[str]) -> Dict[str, List[str]]:
                 buckets: Dict[str, List[str]] = {
                     'line': [],
@@ -1907,16 +2323,31 @@ def generate_html_report(case_name: str, output_dir: str,
                     buckets[_plot_kind(p)].append(p)
                 return buckets
 
+            # -----------------------------------------------------------------------------
+            # Function: `_plot_kind_order`.
+            # Purpose: Handle plot kind order workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _plot_kind_order(*buckets: Dict[str, List[str]]) -> List[str]:
                 order = ('line', 'map', 'relationship', 'heatmap', 'ranking', 'other')
                 return [kind for kind in order if any(b.get(kind) for b in buckets)]
 
+            # -----------------------------------------------------------------------------
+            # Function: `_render_plot_cards`.
+            # Purpose: Handle render plot cards workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _render_plot_cards(img_list: List[str]) -> str:
                 if not img_list:
                     return ''
                 cards = _fig_cards(img_list)
                 return f'            <div class="fig-grid">\n{cards}\n            </div>\n'
 
+            # -----------------------------------------------------------------------------
+            # Function: `_coverage_tabs_markup`.
+            # Purpose: Handle coverage tabs markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _coverage_tabs_markup() -> str:
                 return (
                     f'          <div class="coverage-tabs">\n'
@@ -1927,6 +2358,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_coverage_controls_markup`.
+            # Purpose: Handle coverage controls markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _coverage_controls_markup(base_has_view: bool, matched_has_view: bool) -> str:
                 view_tabs_markup = ''
                 if base_has_view:
@@ -1956,6 +2392,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_coverage_tabs_placeholder_markup`.
+            # Purpose: Handle coverage tabs placeholder markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _coverage_tabs_placeholder_markup() -> str:
                 return (
                     f'          <div class="coverage-tabs coverage-tabs-placeholder" aria-hidden="true">\n'
@@ -1964,6 +2405,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_view_tabs_placeholder_markup`.
+            # Purpose: Handle view tabs placeholder markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _view_tabs_placeholder_markup() -> str:
                 return (
                     f'          <div class="view-tabs top-view-tabs view-tabs-placeholder" aria-hidden="true">\n'
@@ -1972,6 +2418,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'          </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_module_view_controls_markup`.
+            # Purpose: Handle module view controls markup workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _module_view_controls_markup(group: str = 'base',
                                              show_view_tabs: bool = True) -> str:
                 view_tabs_markup = (
@@ -1989,6 +2440,11 @@ def generate_html_report(case_name: str, output_dir: str,
                     f'        </div>\n'
                 )
 
+            # -----------------------------------------------------------------------------
+            # Function: `_build_plot_sections`.
+            # Purpose: Handle build plot sections workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _build_plot_sections(section_imgs: List[str], group: str) -> tuple:
                 if not section_imgs:
                     return '', False
@@ -2008,6 +2464,12 @@ def generate_html_report(case_name: str, output_dir: str,
                         diff_cards = _render_plot_cards(diff_buckets.get(kind, []))
                         if not raw_cards and not diff_cards:
                             continue
+                        # Some diagnostics are inherently diff-only (or raw-only).
+                        # Mirror the available side so default "Raw" view never looks empty.
+                        if not raw_cards and diff_cards:
+                            raw_cards = diff_cards
+                        if not diff_cards and raw_cards:
+                            diff_cards = raw_cards
                         section_html += (
                             f'        <section class="plots-section">\n'
                             f'          <h3 class="section-title">{_plot_kind_label(kind)}</h3>\n'
@@ -2109,7 +2571,7 @@ def generate_html_report(case_name: str, output_dir: str,
 
     # JS snippet to initialise the first visible module for every hemisphere that has content
     init_mods_js = '\n'.join(
-        f"showMod('{hms}', '{next((mm for mm in mods if mm != GEO_SECTOR_MODULE), mods[0])}');"
+        f"showMod('{hms}', '{_default_module(mods)}');"
         for hms, mods in hms_nav_modules.items()
         if mods
     )
@@ -2755,6 +3217,17 @@ def generate_html_report(case_name: str, output_dir: str,
     if (idx < 0) return { kind: 'scalar', key: txt || 'All' };
     return { kind: txt.slice(0, idx) || 'scalar', key: txt.slice(idx + 2) || 'All' };
   }
+  function _recordMetricCode(rec) {
+    if (!rec || typeof rec !== 'object') return '';
+    const code = String(rec.metric_code || rec.metric_id || rec.metric_name || '').trim();
+    return code;
+  }
+  function _recordMetricLabel(rec) {
+    if (!rec || typeof rec !== 'object') return '';
+    const shortLabel = String(rec.metric_short_label || rec.metric_name || '').trim();
+    if (shortLabel) return shortLabel;
+    return _recordMetricCode(rec);
+  }
   function _setSelectOptions(el, options, current) {
     if (!el) return '';
     const vals = Array.isArray(options) ? options : [];
@@ -2966,7 +3439,7 @@ def generate_html_report(case_name: str, output_dir: str,
     const view = _axisValue(hms, axis, 'view');
     const region = _axisValue(hms, axis, 'region');
     const dom = _splitDomain(_axisValue(hms, axis, 'domain'));
-    const metric = _axisValue(hms, axis, 'metric');
+    const metricCode = _axisValue(hms, axis, 'metric');
     return recs.filter(r =>
       String(r.module) === moduleName &&
       String(r.coverage_mode) === coverage &&
@@ -2974,7 +3447,7 @@ def generate_html_report(case_name: str, output_dir: str,
       String(r.region) === region &&
       String(r.domain_kind) === dom.kind &&
       String(r.domain_key) === dom.key &&
-      (!includeMetric || String(r.metric_name) === metric)
+      (!includeMetric || _recordMetricCode(r) === metricCode)
     );
   }
   function _refreshAxis(hms, axis) {
@@ -3021,8 +3494,25 @@ def generate_html_report(case_name: str, output_dir: str,
       String(r.domain_kind) === domObj.kind && String(r.domain_key) === domObj.key
     );
 
-    const metrics = _uniq(byDomain.map(r => String(r.metric_name))).sort();
-    _setSelectOptions(metricEl, metrics, metricEl ? metricEl.value : '');
+    const metricMap = new Map();
+    byDomain.forEach(r => {
+      const code = _recordMetricCode(r);
+      const label = _recordMetricLabel(r);
+      if (!code) return;
+      if (!metricMap.has(code)) metricMap.set(code, label || code);
+    });
+    const metricCodes = Array.from(metricMap.keys()).sort((a, b) => {
+      const la = String(metricMap.get(a) || a);
+      const lb = String(metricMap.get(b) || b);
+      return la < lb ? -1 : (la > lb ? 1 : 0);
+    });
+    _setSelectOptions(metricEl, metricCodes, metricEl ? metricEl.value : '');
+    if (metricEl) {
+      Array.from(metricEl.options).forEach(opt => {
+        const code = String(opt.value || '');
+        opt.textContent = String(metricMap.get(code) || code);
+      });
+    }
   }
 
   function _pearson(xs, ys) {
@@ -3214,7 +3704,10 @@ def generate_html_report(case_name: str, output_dir: str,
   }
   function _axisLabel(hms, axis) {
     const moduleName = _axisValue(hms, axis, 'module');
-    const metric = _axisValue(hms, axis, 'metric');
+    const metricEl = _axisEl(hms, axis, 'metric');
+    const metric = metricEl && metricEl.selectedOptions && metricEl.selectedOptions.length
+      ? String(metricEl.selectedOptions[0].textContent || metricEl.value || '')
+      : _axisValue(hms, axis, 'metric');
     const dom = _splitDomain(_axisValue(hms, axis, 'domain'));
     const region = _axisValue(hms, axis, 'region');
     const view = _axisValue(hms, axis, 'view');
@@ -3785,26 +4278,52 @@ def generate_html_report(case_name: str, output_dir: str,
     _refreshAxis(hms, 'y');
     _render(hms);
   }
-  function _extractRecords(payload) {
-    return Array.isArray(payload && payload.records) ? payload.records : [];
+  function _normalizeRecord(rec) {
+    const src = (rec && typeof rec === 'object') ? rec : {};
+    const out = Object.assign({}, src);
+    out.hemisphere = String(out.hemisphere || '').toLowerCase();
+    out.module = String(out.module || '');
+    out.region = String(out.region || '');
+    out.coverage_mode = String(out.coverage_mode || '');
+    out.view_mode = String(out.view_mode || '');
+    out.domain_kind = String(out.domain_kind || '');
+    out.domain_key = String(out.domain_key || '');
+    out.metric_short_label = String(out.metric_short_label || out.metric_name || out.metric_code || out.metric_id || '');
+    out.metric_name = String(out.metric_name || out.metric_short_label || out.metric_code || out.metric_id || '');
+    out.metric_code = String(out.metric_code || out.metric_id || out.metric_name || '');
+    out.dataset_name = String(out.dataset_name || '');
+    const dtype = String(out.dataset_type || 'model').toLowerCase();
+    out.dataset_type = (dtype === 'obs' || dtype === 'group') ? dtype : 'model';
+    const obsKind = String(out.dataset_obs_kind || '').toLowerCase();
+    out.dataset_obs_kind = (obsKind === 'obs1' || obsKind === 'obs2') ? obsKind : '';
+    const val = _valueNum(out.value);
+    out.value = Number.isFinite(val) ? val : null;
+    return out;
   }
-  function _inlinePayload() {
-    const el = document.getElementById('cross-module-inline-data');
-    if (!el) return null;
-    const txt = String(el.textContent || '').trim();
-    if (!txt) return null;
-    try {
-      return JSON.parse(txt);
-    } catch (err) {
-      return null;
+  function _extractRecords(payload) {
+    const raw = Array.isArray(payload && payload.records) ? payload.records : [];
+    if (!raw.length) return [];
+    const fields = Array.isArray(payload && payload.record_fields)
+      ? payload.record_fields.map(v => String(v || ''))
+      : [];
+    if (fields.length && Array.isArray(raw[0])) {
+      return raw.map(row => {
+        const arr = Array.isArray(row) ? row : [];
+        const rec = {};
+        for (let i = 0; i < fields.length; i++) rec[fields[i]] = arr[i];
+        return _normalizeRecord(rec);
+      });
     }
+    return raw.map(r => _normalizeRecord(r));
   }
 
   window.initCrossModuleExplorer = async function (jsonPath) {
     const path = String(jsonPath || 'cross_module_metrics.json');
-    let payload = null;
+    let payload = (typeof window === 'object' && window && window.__SITOOL_CROSS_PAYLOAD__)
+      ? window.__SITOOL_CROSS_PAYLOAD__
+      : null;
     let fetchErr = null;
-    if (path && typeof fetch === 'function') {
+    if (!payload && path && typeof fetch === 'function') {
       try {
         const res = await fetch(path, { cache: 'no-store' });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -3813,11 +4332,10 @@ def generate_html_report(case_name: str, output_dir: str,
         fetchErr = err;
       }
     }
-    if (!payload) payload = _inlinePayload();
     if (payload) {
       const records = _extractRecords(payload);
-      const nh = records.filter(r => String(r.hemisphere).toLowerCase() === 'nh');
-      const sh = records.filter(r => String(r.hemisphere).toLowerCase() === 'sh');
+      const nh = records.filter(r => String(r.hemisphere) === 'nh');
+      const sh = records.filter(r => String(r.hemisphere) === 'sh');
       _initHms('nh', nh);
       _initHms('sh', sh);
       return;
@@ -3908,6 +4426,15 @@ figcaption{{padding:7px 12px;font-size:.78em;color:#666;background:#fafafa;borde
 .geo-note{{margin-bottom:12px;color:#47627f;font-size:.84em}}
 .geo-map-wrap{{display:flex;justify-content:center}}
 .geo-figure{{max-width:600px!important;flex:1 1 auto!important}}
+.metric-doc-section{{max-width:1080px}}
+.metric-doc-intro{{margin:0 0 10px;color:#405e79;font-size:.9em;line-height:1.55}}
+.metric-doc-block{{background:#fff;border:1px solid #d7e1ea;border-radius:8px;padding:14px 16px;margin:14px 0 0}}
+.metric-doc-block h3{{font-size:1em;color:#1f4469;margin:0 0 8px}}
+.metric-doc-text{{margin:0 0 8px;color:#46627c;font-size:.87em;line-height:1.55}}
+.formula-card{{border:1px solid #e0e8f0;border-radius:8px;background:#f8fbff;padding:10px 12px;margin:10px 0 0}}
+.formula-card h4{{margin:0 0 6px;font-size:.9em;color:#1f4469}}
+.formula-eq{{margin:0;padding:8px 10px;border-radius:6px;background:#0f1720;color:#d8ebff;font-size:.8em;line-height:1.45;white-space:pre-wrap;word-break:break-word}}
+.formula-notes{{margin:8px 0 0 18px;padding:0;color:#4a6279;font-size:.82em;line-height:1.45}}
 /* Lightbox */
 #lb{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:9999;
   align-items:center;justify-content:center;cursor:zoom-out}}
@@ -4093,8 +4620,8 @@ td:first-child{{text-align:left;font-weight:400}}
   <img id="lb-img" src="" alt="">
 </div>
 <script src="report_download.js"></script>
-<script id="cross-module-inline-data" type="application/json">{cross_payload_inline_json}</script>
 <script id="cross-module-obs-names" type="application/json">{obs_name_map_inline_json}</script>
+<script src="cross_module_metrics.js"></script>
 <script src="report_cross_module.js"></script>
 <script>
 // Switch the active hemisphere tab and show its pane

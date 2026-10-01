@@ -9,6 +9,11 @@ from scripts.utils import core as _core
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_runtime_tmpdir`.
+# Purpose: Handle runtime tmpdir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _runtime_tmpdir() -> str:
     """Resolve active temporary directory with case-level override."""
     preferred = str(os.environ.get('SITOOL_CASE_TMPDIR', '')).strip()
@@ -21,6 +26,11 @@ def _runtime_tmpdir() -> str:
     return resolved
 
 
+# -----------------------------------------------------------------------------
+# Function: `gen_polar_grid`.
+# Purpose: Handle gen polar grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def gen_polar_grid(hms: str, res: float, nx: int = None, ny: int = None, lat_range: list = None,
                    lon_range: list = None, proj_name: str = None, grid_path: str = './',
                    etopo_file: str = None, region_mask_file: str = None, ellps: str = 'WGS84') -> str:
@@ -256,6 +266,11 @@ y   |                    #,,,#       %,,,,,,,,,,,,,,,,,,,,,,%
 
     return f'{grid_path}{grid_filename}.nc'
 
+# -----------------------------------------------------------------------------
+# Function: `_calculate_cell_areas`.
+# Purpose: Handle calculate cell areas workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _calculate_cell_areas(lon_bnds: np.ndarray, lat_bnds: np.ndarray, nx: int, ny: int) -> np.ndarray:
     """Approximate spherical quadrilateral grid-cell areas using the Bretschneider formula.
 
@@ -276,6 +291,11 @@ def _calculate_cell_areas(lon_bnds: np.ndarray, lat_bnds: np.ndarray, nx: int, n
         Area array (nx, ny), units m².
     """
 
+    # -----------------------------------------------------------------------------
+    # Function: `haversine_area`.
+    # Purpose: Handle haversine area workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def haversine_area(lat1, lon1, lat2, lon2, lat3, lon3, lat4, lon4):
         """Estimate spherical quadrilateral area via the Bretschneider formula (units: m²)."""
         geod = pyproj.Geod(ellps='WGS84')
@@ -304,6 +324,11 @@ def _calculate_cell_areas(lon_bnds: np.ndarray, lat_bnds: np.ndarray, nx: int, n
 
     return area
 
+# -----------------------------------------------------------------------------
+# Function: `_write_grid_files`.
+# Purpose: Handle write grid files workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _write_grid_files(lon: np.ndarray, lat: np.ndarray, lon_bnds: np.ndarray,
                       lat_bnds: np.ndarray, xv: np.ndarray, yv: np.ndarray,
                       x_bnds: np.ndarray, y_bnds: np.ndarray, area: np.ndarray,
@@ -403,6 +428,11 @@ def _write_grid_files(lon: np.ndarray, lat: np.ndarray, lon_bnds: np.ndarray,
 
     write_netcdf_compressed(ds, f'{grid_path}{grid_filename}.nc')
 
+# -----------------------------------------------------------------------------
+# Function: `_add_land_mask`.
+# Purpose: Handle add land mask workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _add_land_mask(ds: xr.Dataset, etopo_file: str, grid_path: str,
                    grid_filename: str, lat_sta: float, lat_end: float) -> None:
     """Add land mask to grid dataset.
@@ -435,6 +465,11 @@ def _add_land_mask(ds: xr.Dataset, etopo_file: str, grid_path: str,
                                        attrs={'long_name': 'ocean/land mask',
                                               'description': '1: ocean grid, 0: land grid'})
 
+# -----------------------------------------------------------------------------
+# Function: `_add_region_mask`.
+# Purpose: Handle add region mask workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _add_region_mask(ds: xr.Dataset, region_mask_file: str,
                      grid_path: str, grid_filename: str) -> None:
     """Add region mask to grid dataset.
@@ -459,6 +494,11 @@ def _add_region_mask(ds: xr.Dataset, region_mask_file: str,
     ds['sea_ice_region'] = xr.DataArray(sea_ice_region, dims=('x', 'y'),
                                         attrs={'long_name': 'sea ice region mask'})
 
+# -----------------------------------------------------------------------------
+# Function: `gen_mask`.
+# Purpose: Handle gen mask workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def gen_mask(array1: np.ndarray, array2: np.ndarray) -> np.ndarray:
     """Generate a valid-data mask for two co-located arrays.
 

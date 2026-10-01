@@ -23,6 +23,11 @@ warnings.filterwarnings('ignore', message='pkg_resources is deprecated', categor
 os.environ.setdefault('HDF5_USE_FILE_LOCKING', 'FALSE')
 
 
+# -----------------------------------------------------------------------------
+# Function: `_as_bool`.
+# Purpose: Handle as bool workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _as_bool(value: str, default: bool = False) -> bool:
     """Parse one environment-like boolean string."""
     if value is None:
@@ -30,6 +35,11 @@ def _as_bool(value: str, default: bool = False) -> bool:
     return str(value).strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+# -----------------------------------------------------------------------------
+# Function: `_as_bounded_int`.
+# Purpose: Handle as bounded int workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _as_bounded_int(value: str, default: int, lower: int, upper: int) -> int:
     """Parse one bounded integer with fallback."""
     try:
@@ -39,6 +49,11 @@ def _as_bounded_int(value: str, default: int, lower: int, upper: int) -> int:
     return max(int(lower), min(int(upper), parsed))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_resolve_runtime_tmpdir`.
+# Purpose: Handle resolve runtime tmpdir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _resolve_runtime_tmpdir() -> str:
     """Resolve runtime temp directory and avoid falling back to /tmp by default."""
     explicit = str(os.environ.get('SITOOL_TMPDIR', '')).strip()

@@ -21,6 +21,11 @@ logger = logging.getLogger(__name__)
 class SItransMetrics(SeaIceMetricsBase):
     """Calculate sea ice transition (advance and retreat) dates."""
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, grid_file: str, date_sta: str, date_end: str,
                  hemisphere: str = None, metric: str = 'MAE',
                  threshold: float = 15.0, smooth_window_days: int = 15,
@@ -76,6 +81,11 @@ class SItransMetrics(SeaIceMetricsBase):
         self.year_sta, self.year_end = date_start_dt.year, date_end_dt.year
         self.year = np.arange(self.year_sta, self.year_end + 1)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_transition_cycle_start`.
+    # Purpose: Handle transition cycle start workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _transition_cycle_start(self) -> Tuple[int, int]:
         """Return (month, day) for the hemisphere-specific transition-year start.
 
@@ -90,6 +100,11 @@ class SItransMetrics(SeaIceMetricsBase):
             return 9, 1
         return 3, 1
 
+    # -----------------------------------------------------------------------------
+    # Function: `_get_transition_window`.
+    # Purpose: Handle get transition window workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _get_transition_window(self, start_year: int) -> Tuple[pd.Timestamp, pd.Timestamp]:
         """Build hemisphere-aware [start, end] timestamps for one transition year."""
         start_month, start_day = self._transition_cycle_start()
@@ -98,6 +113,11 @@ class SItransMetrics(SeaIceMetricsBase):
         end_date = start_date + pd.DateOffset(years=1) - pd.Timedelta(days=1)
         return start_date, end_date
 
+    # -----------------------------------------------------------------------------
+    # Function: `_time_values_to_keys`.
+    # Purpose: Handle time values to keys workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _time_values_to_keys(time_values) -> list[Tuple[int, int, int]]:
         """Convert decoded time coordinate values into `(year, month, day)` keys."""
@@ -118,6 +138,11 @@ class SItransMetrics(SeaIceMetricsBase):
         time_vals = pd.to_datetime(vals)
         return [(int(t.year), int(t.month), int(t.day)) for t in time_vals]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_transition_mask`.
+    # Purpose: Handle transition mask workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _transition_mask(self, time_keys: list[Tuple[int, int, int]], start_year: int) -> np.ndarray:
         """Return boolean mask for one hemisphere-aware transition-year window."""
         start_month, start_day = self._transition_cycle_start()
@@ -136,6 +161,11 @@ class SItransMetrics(SeaIceMetricsBase):
             mask[idx] = in_first_part or in_second_part
         return mask
 
+    # -----------------------------------------------------------------------------
+    # Function: `cal_sitrans`.
+    # Purpose: Handle cal sitrans workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def cal_sitrans(self, sic_file, threshold=None, sic_name='siconc',
                     advance_ctrl=True, retreat_ctrl=True):
         """Calculate sea ice advance and retreat dates for each year.
@@ -271,6 +301,11 @@ class SItransMetrics(SeaIceMetricsBase):
             'start_year': np.asarray(start_years, dtype=int),
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `SItrans_2M_metrics`.
+    # Purpose: Handle SItrans 2M metrics workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def SItrans_2M_metrics(self, sic_file1, sic_file2,
                            sic_name1='siconc', sic_name2='siconc',
                            sector: str = 'All'):
@@ -280,6 +315,11 @@ class SItransMetrics(SeaIceMetricsBase):
         trend maps, and scalar summary statistics for advance/retreat dates.
         """
 
+        # -----------------------------------------------------------------------------
+        # Function: `_calc_trend_map`.
+        # Purpose: Handle calc trend map workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _calc_trend_map(data_3d: np.ndarray, min_valid_ratio: float = 0.6):
             """Per-grid trend, p-value, and valid-sample count."""
             n_years, nx, ny = data_3d.shape
@@ -303,6 +343,11 @@ class SItransMetrics(SeaIceMetricsBase):
 
             return trend, pvalue, valid_count
 
+        # -----------------------------------------------------------------------------
+        # Function: `_weighted_corr`.
+        # Purpose: Handle weighted corr workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _weighted_corr(a: np.ndarray, b: np.ndarray, w: np.ndarray) -> float:
             """Area-weighted Pearson correlation for finite paired grid cells."""
             valid = np.isfinite(a) & np.isfinite(b) & np.isfinite(w)
@@ -324,6 +369,11 @@ class SItransMetrics(SeaIceMetricsBase):
                 return np.nan
             return float(cov / np.sqrt(varx * vary))
 
+        # -----------------------------------------------------------------------------
+        # Function: `_weighted_mean_field`.
+        # Purpose: Handle weighted mean field workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _weighted_mean_field(arr: np.ndarray, w: np.ndarray) -> float:
             valid = np.isfinite(arr) & np.isfinite(w) & (w > 0)
             if np.sum(valid) < 1:
@@ -335,6 +385,11 @@ class SItransMetrics(SeaIceMetricsBase):
                 return np.nan
             return float(np.sum(vv * ww) / wsum)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_area_weighted_mean_series`.
+        # Purpose: Handle area weighted mean series workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _area_weighted_mean_series(data_3d: np.ndarray, w: np.ndarray) -> np.ndarray:
             n_years = data_3d.shape[0]
             series = np.full((n_years,), np.nan, dtype=float)
@@ -342,6 +397,11 @@ class SItransMetrics(SeaIceMetricsBase):
                 series[yy] = _weighted_mean_field(data_3d[yy, :, :], w)
             return series
 
+        # -----------------------------------------------------------------------------
+        # Function: `_safe_matrix_diff`.
+        # Purpose: Handle safe matrix diff workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _safe_matrix_diff(obs_map: np.ndarray, mod_map: np.ndarray, metric_name: str) -> float:
             try:
                 val = utils.MatrixDiff(
@@ -355,6 +415,11 @@ class SItransMetrics(SeaIceMetricsBase):
             except Exception:
                 return np.nan
 
+        # -----------------------------------------------------------------------------
+        # Function: `_weighted_sig_fraction`.
+        # Purpose: Handle weighted sig fraction workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _weighted_sig_fraction(sigmask: np.ndarray, w: np.ndarray) -> float:
             valid = np.isfinite(sigmask) & np.isfinite(w) & (w > 0)
             if np.sum(valid) < 1:
@@ -366,7 +431,17 @@ class SItransMetrics(SeaIceMetricsBase):
                 return np.nan
             return float(100.0 * np.sum(ww * vv) / denom)
 
+        # -----------------------------------------------------------------------------
+        # Function: `_calc_relationship`.
+        # Purpose: Handle calc relationship workflow for the current execution path.
+        # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+        # -----------------------------------------------------------------------------
         def _calc_relationship(ret_series: np.ndarray, adv_series: np.ndarray) -> Dict[str, float]:
+            # -----------------------------------------------------------------------------
+            # Function: `_fit`.
+            # Purpose: Handle fit workflow for the current execution path.
+            # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+            # -----------------------------------------------------------------------------
             def _fit(x: np.ndarray, y: np.ndarray) -> Dict[str, float]:
                 valid = np.isfinite(x) & np.isfinite(y)
                 if np.sum(valid) < 3:
@@ -428,10 +503,10 @@ class SItransMetrics(SeaIceMetricsBase):
         retreat_bias_map = retreat_clim_mod - retreat_clim_obs
 
         # Interannual variability maps
-        advance_std_obs = np.nanstd(advance_obs, axis=0)
-        advance_std_mod = np.nanstd(advance_mod, axis=0)
-        retreat_std_obs = np.nanstd(retreat_obs, axis=0)
-        retreat_std_mod = np.nanstd(retreat_mod, axis=0)
+        advance_std_obs = utils.detrended_std_map(advance_obs, min_count=2)
+        advance_std_mod = utils.detrended_std_map(advance_mod, min_count=2)
+        retreat_std_obs = utils.detrended_std_map(retreat_obs, min_count=2)
+        retreat_std_mod = utils.detrended_std_map(retreat_mod, min_count=2)
 
         advance_std_diff_map = advance_std_mod - advance_std_obs
         retreat_std_diff_map = retreat_std_mod - retreat_std_obs
@@ -622,6 +697,11 @@ class SItransMetrics(SeaIceMetricsBase):
             'trend_sig_p': float(self.trend_sig_p),
         }
 
+    # -----------------------------------------------------------------------------
+    # Function: `calculate_edge_area_difference`.
+    # Purpose: Handle calculate edge area difference workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def calculate_edge_area_difference(self, obs_array, mod_array,
                                        min_day=1, max_day=365, step=5, is_advance=True):
         """

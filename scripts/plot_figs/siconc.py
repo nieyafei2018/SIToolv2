@@ -8,6 +8,11 @@ from scripts import utils
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `_axes_span_in_figure`.
+# Purpose: Handle axes span in figure workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _axes_span_in_figure(axes):
     axes_list = [ax for ax in np.ravel(np.asarray(axes)).tolist() if ax is not None]
     if not axes_list:
@@ -19,6 +24,11 @@ def _axes_span_in_figure(axes):
     return x0, x1, y0
 
 
+# -----------------------------------------------------------------------------
+# Function: `_legend_ncol_by_width`.
+# Purpose: Handle legend ncol by width workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     n_items = max(1, len(labels))
     fs = float(fontsize)
@@ -27,44 +37,36 @@ def _legend_ncol_by_width(fig, labels, width_frac, target_rows, fontsize):
     char_px = fs * float(fig.dpi) / 72.0 * 0.60
     item_px = max(70.0, char_px * (widest_chars + 8.0))
     max_fit = max(1, int(fig_width_px // item_px))
-    by_rows = max(1, int(math.ceil(n_items / max(1, int(target_rows)))))
-    return max(1, min(n_items, max_fit, by_rows))
+    max_rows = max(1, int(target_rows))
+
+    for rows in range(1, max_rows + 1):
+        ncol = int(math.ceil(n_items / float(rows)))
+        if ncol <= max_fit:
+            return max(1, min(n_items, ncol))
+
+    return max(1, min(n_items, max_fit))
 
 
+# -----------------------------------------------------------------------------
+# Function: `_place_adaptive_bottom_legend`.
+# Purpose: Handle place adaptive bottom legend workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _place_adaptive_bottom_legend(fig, axes, handles, labels, *,
                                   target_rows=3, fontsize=None, y_gap=0.010):
-    if not handles or not labels:
-        return None
-    fs = _FS_LEGEND if fontsize is None else float(fontsize)
-    x0, x1, _ = _axes_span_in_figure(axes)
-    width = max(0.15, x1 - x0)
-    ncol = _legend_ncol_by_width(fig, labels, width, target_rows, fs)
-    n_rows = int(math.ceil(len(labels) / float(max(1, ncol))))
-    bottom_margin = min(
-        0.46,
-        max(0.14, 0.07 + 0.056 * n_rows) + max(0.0, float(_LINE_LEGEND_BOTTOM_MARGIN_EXTRA)),
-    )
-    fig.subplots_adjust(bottom=bottom_margin)
-    x0, x1, y0 = _axes_span_in_figure(axes)
-    width = max(0.15, x1 - x0)
-    gap_auto = float(y_gap) + 0.004 * max(0, n_rows - 1)
-    legend_top = max(
-        0.01,
-        y0 - gap_auto - max(0.0, float(_LINE_LEGEND_Y_GAP_EXTRA)),
-    )
-    return fig.legend(
-        handles, labels,
-        loc='upper left',
-        bbox_to_anchor=(x0, legend_top, width, 0.01),
-        bbox_transform=fig.transFigure,
-        ncol=ncol,
-        mode='expand',
-        fontsize=fs,
-        frameon=_LINE_LEGEND_FRAMEON,
-        borderaxespad=0.0,
+    return _place_unified_line_legend(
+        fig,
+        axes,
+        handles,
+        labels,
     )
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_siconc_key_month_ano`.
+# Purpose: Handle plot siconc key month ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_siconc_key_month_ano(sic_metric_obs, sic_metric_models, model_labels,
                               year_range, month, hms=None, fig_name=None,
                               line_style=None, color=None, legend_y_gap=None,
@@ -133,13 +135,13 @@ def plot_siconc_key_month_ano(sic_metric_obs, sic_metric_models, model_labels,
                 spread_idx = jj - n_obs
                 if spread_idx < len(model_spread_payloads):
                     spread_dict = model_spread_payloads[spread_idx]
-                    xs, ys = _extract_key_month_series(
+                    _, ys = _extract_key_month_series(
                         spread_dict or {},
                         f'{var}_ano_{mtag}',
                         month=month, year_range=year_range,
                     )
                     if ys.size == 0:
-                        xs, ys = _extract_key_month_series(
+                        _, ys = _extract_key_month_series(
                             spread_dict or {},
                             f'{var}_ano',
                             month=month, year_range=year_range,
@@ -170,29 +172,36 @@ def plot_siconc_key_month_ano(sic_metric_obs, sic_metric_models, model_labels,
     ax[-1].tick_params(axis='x', rotation=45, labelsize=_FS_TICK)
 
     handles, labels_leg = ax[0].get_legend_handles_labels()
-    if handles and labels_leg:
-        fig.legend(
-            handles, labels_leg,
-            loc='center left', bbox_to_anchor=(0.80, 0.5),
-            ncol=1, fontsize=max(11, _FS_LEGEND + 2),
-            frameon=True, borderaxespad=0.0,
-        )
-    _finalize_line_layout(fig, legend_location='right', pad=0.78)
-    fig.subplots_adjust(left=0.09, right=0.78, hspace=_line_subplot_hspace(0.34))
+    _finalize_line_layout(fig, legend_location='none', pad=0.82)
+    fig.subplots_adjust(left=0.09, right=0.98, hspace=_line_subplot_hspace(0.34))
+    _place_adaptive_bottom_legend(
+        fig, ax, handles, labels_leg,
+        target_rows=3,
+        fontsize=max(9, _FS_LEGEND - 1),
+        y_gap=float(0.052 if legend_y_gap is None else legend_y_gap),
+    )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_heat_map`.
+# Purpose: Handle plot heat map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_heat_map(data, row_labels, col_labels, ax=None,
                   cbar_kw=None, cbarlabel="",
                   obs_row=None, obs_row_label='obs2',
                   ratio_vmin=0.5, ratio_vmax=2.0, cmap='RdBu_r',
-                  add_colorbar=True, **kwargs):
+                  add_colorbar=True, display_transform: str = 'lin2021_norm',
+                  show_xticklabels: bool = True,
+                  show_yticklabels: bool = True,
+                  xtick_rotation=None,
+                  xtick_fontsize=None,
+                  **kwargs):
     """Draw a reference-relative heatmap.
 
-    When *obs_row* is provided the layout is:
-      - Row 0: obs2 absolute values on a solid grey background.
-      - Rows 1+: model/obs2 ratios coloured by a diverging colormap centered
-        at 1 so values > 1 indicate larger error than the observational
-        uncertainty.
+    Supported ``display_transform`` values:
+      - ``lin2021_norm``: ``|E_model| / |E_obs2|`` normalization for model rows.
+      - ``raw``: render the input matrix as-is.
 
     Args:
         data:           2-D array (N_models, M) of model metric values.
@@ -206,6 +215,13 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
         obs_row_label:  Label for the obs2 reference row.
         ratio_vmin/max: Color range for model ratio rows (default 0.5 – 2.0).
         add_colorbar:   Draw colorbar when True.
+        display_transform: Display transform applied to model rows when
+            ``obs_row`` is present. Use ``lin2021_norm`` for the normalized
+            heatmap requested by Lin et al. (2021).
+        show_xticklabels: Whether to render x-axis tick labels.
+        show_yticklabels: Whether to render y-axis tick labels.
+        xtick_rotation: Optional override for x tick-label rotation in degrees.
+        xtick_fontsize: Optional override for x tick-label font size.
 
     Returns:
         The ``AxesImage`` produced by ``imshow``.
@@ -231,11 +247,13 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
         obs_row = np.asarray(obs_row, dtype=float).reshape(-1)
         if obs_row.size != n_metrics:
             raise ValueError('obs_row size must match the number of heatmap columns')
-        # Compute ratios: model absolute / obs2 absolute (guard against zero)
-        obs2_safe = np.where(np.abs(obs_row) < 1e-9, 1e-9, np.abs(obs_row))
-        ratio_data = np.abs(data) / obs2_safe[np.newaxis, :]
-        # Full display array: NaN placeholder row for obs2 + ratio rows
-        display_data = np.vstack([np.full((1, n_metrics), np.nan), ratio_data])
+        transform = str(display_transform or '').strip().lower()
+        if transform in {'lin2021_norm', 'normalized', 'normalised', 'ratio'}:
+            obs2_safe = np.where(np.abs(obs_row) < 1e-9, 1e-9, np.abs(obs_row))
+            ratio_data = np.abs(data) / obs2_safe[np.newaxis, :]
+            display_data = np.vstack([np.full((1, n_metrics), np.nan), ratio_data])
+        else:
+            display_data = np.vstack([np.full((1, n_metrics), np.nan), np.asarray(data, dtype=float)])
         all_labels = [obs_row_label] + list(row_labels)
         n_rows = n_models + 1
     else:
@@ -244,7 +262,7 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
         n_rows = n_models
 
     # --- Draw heatmap with diverging colormap and a clear center ---
-    if has_obs:
+    if has_obs and ratio_data is not None:
         norm = matplotlib.colors.TwoSlopeNorm(
             vmin=ratio_vmin,
             vcenter=1.0,
@@ -280,9 +298,17 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
     # --- Colorbar for model ratio rows ---
     cbar = None
     if add_colorbar:
-        cbar_kw.setdefault('fraction', 0.026)
-        cbar_kw.setdefault('pad', 0.014)
-        cbar_kw.setdefault('aspect', 38)
+        orientation = str(cbar_kw.pop('orientation', 'horizontal')).strip().lower()
+        if orientation not in {'horizontal', 'vertical'}:
+            orientation = 'horizontal'
+        if orientation == 'horizontal':
+            cbar_kw.setdefault('fraction', 0.034)
+            cbar_kw.setdefault('pad', 0.115)
+            cbar_kw.setdefault('aspect', max(26, int(24 + 1.6 * max(1, n_metrics))))
+        else:
+            cbar_kw.setdefault('fraction', 0.026)
+            cbar_kw.setdefault('pad', 0.014)
+            cbar_kw.setdefault('aspect', 38)
         cbar_extend_req = cbar_kw.pop('extend', 'auto')
         cbar_extend = _resolve_colorbar_extend(
             im,
@@ -291,17 +317,52 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
             vmax=getattr(norm, 'vmax', None),
             extend=cbar_extend_req,
         )
-        cbar = ax.figure.colorbar(im, ax=ax, extend=cbar_extend, **cbar_kw)
-        cbar.ax.set_ylabel(cbarlabel, rotation=-90, va='bottom', fontsize=max(16, _FS_CBAR_LABEL))
-        cbar.ax.tick_params(labelsize=max(15, _FS_CBAR_TICK))
+        cbar = ax.figure.colorbar(
+            im, ax=ax, orientation=orientation, extend=cbar_extend, **cbar_kw
+        )
+        label_fs = max(1.0, float(_FS_CBAR_LABEL))
+        tick_fs = max(1.0, float(_FS_CBAR_TICK))
+        if orientation == 'horizontal':
+            cbar.set_label(cbarlabel, fontsize=label_fs, labelpad=6)
+        else:
+            cbar.ax.set_ylabel(cbarlabel, rotation=-90, va='bottom', fontsize=label_fs)
+        cbar.ax.tick_params(labelsize=tick_fs)
+        if orientation == 'horizontal':
+            _avoid_horizontal_cbar_xtick_overlap(ax.figure, cbar, [ax])
 
     # --- Tick labels ---
     ax.set_xticks(np.arange(n_metrics))
     ax.set_yticks(np.arange(n_rows))
-    ax.set_xticklabels(col_labels, fontsize=_FS_TICK)
-    ax.set_yticklabels(all_labels, fontsize=_FS_TICK)
-    plt.setp(ax.get_xticklabels(), rotation=30, ha='right', rotation_mode='anchor')
+    if show_xticklabels:
+        max_label_len = max((len(str(lb)) for lb in col_labels), default=0)
+        if n_metrics >= 8 or max_label_len >= 18:
+            auto_rotation = 24.0
+            auto_fontsize = max(8.0, float(_FS_TICK) - 3.0)
+        elif n_metrics >= 6 or max_label_len >= 14:
+            auto_rotation = 27.0
+            auto_fontsize = max(9.0, float(_FS_TICK) - 2.0)
+        else:
+            auto_rotation = 30.0
+            auto_fontsize = float(_FS_TICK)
+        use_rotation = float(auto_rotation if xtick_rotation is None else xtick_rotation)
+        use_fontsize = max(1.0, float(auto_fontsize if xtick_fontsize is None else xtick_fontsize))
+        ax.set_xticklabels(col_labels, fontsize=use_fontsize)
+        plt.setp(ax.get_xticklabels(), rotation=use_rotation, ha='right', rotation_mode='anchor')
+        ax.tick_params(axis='x', pad=1)
+    else:
+        ax.set_xticklabels([])
+        ax.tick_params(axis='x', which='both', bottom=False, labelbottom=False)
+    if show_yticklabels:
+        ax.set_yticklabels(all_labels, fontsize=_FS_TICK)
+    else:
+        ax.set_yticklabels([])
+        ax.tick_params(axis='y', which='both', left=False, labelleft=False)
 
+    # -----------------------------------------------------------------------------
+    # Function: `_adaptive_text_color`.
+    # Purpose: Handle adaptive text color workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _adaptive_text_color(value: float, fallback: str = 'black') -> str:
         if not np.isfinite(value):
             return fallback
@@ -335,6 +396,11 @@ def plot_heat_map(data, row_labels, col_labels, ax=None,
 
     return im
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SIC_ts`.
+# Purpose: Handle plot SIC ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SIC_ts(sic_metric_obs, sic_metric_AllModel, model_labels, fig_name,
                 line_style=None, color=None, model_spread_payloads=None, **kwargs):
     """Plot monthly climatological cycles of SIE, SIA, PIA, and MIZ.
@@ -436,6 +502,11 @@ def plot_SIC_ts(sic_metric_obs, sic_metric_AllModel, model_labels, fig_name,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_IIEE_ts`.
+# Purpose: Handle plot IIEE ts workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_IIEE_ts(SIC_DIFF_AllModel, model_labels, fig_name,
                  line_style=None, color=None, obs_uncertainty=None,
                  obs_uncertainty_label='Obs uncertainty (obs2-obs1)',
@@ -547,6 +618,11 @@ def plot_IIEE_ts(SIC_DIFF_AllModel, model_labels, fig_name,
     )
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SIC_ano`.
+# Purpose: Handle plot SIC ano workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SIC_ano(sic_metric_obs, sic_metric_AllModel, model_labels, year_range, fig_name,
                  line_style=None, color=None, hms=None, model_spread_payloads=None, **kwargs):
     """Plot monthly anomaly time series for SIE, SIA, PIA, and MIZ.
@@ -565,32 +641,9 @@ def plot_SIC_ano(sic_metric_obs, sic_metric_AllModel, model_labels, year_range, 
     """
     # assemble anomalies, trend slopes, standard deviations, and p-values
     keys = ['SIE', 'SIA', 'PIA', 'MIZ']
-    data1 = np.array([[d[f'{k}_ano'] for k in keys] for d in sic_metric_obs])
-    data2 = np.array([[d[f'{k}_ano'] for k in keys] for d in sic_metric_AllModel])
-    data = np.concatenate((data1, data2), axis=0)
-
-    data1_slope = np.array([[_extract_trend_slope_pvalue(d.get(f'{k}_ano_tr'))[0] for k in keys] for d in sic_metric_obs])
-    data2_slope = np.array([[_extract_trend_slope_pvalue(d.get(f'{k}_ano_tr'))[0] for k in keys] for d in sic_metric_AllModel])
-    data_slope = np.concatenate((data1_slope * 12 * 10, data2_slope * 12 * 10), axis=0)
-
-    data1_p = np.array([[_extract_trend_slope_pvalue(d.get(f'{k}_ano_tr'))[1] for k in keys] for d in sic_metric_obs])
-    data2_p = np.array([[_extract_trend_slope_pvalue(d.get(f'{k}_ano_tr'))[1] for k in keys] for d in sic_metric_AllModel])
-    data_p = np.concatenate((data1_p, data2_p), axis=0)
-
-    metrics_all = list(sic_metric_obs) + list(sic_metric_AllModel)
-    data_mean = np.array([
-        [
-            np.nanmean(np.asarray(
-                d.get(f'{k}_ts', d.get(f'{k}_clim', np.array([np.nan]))),
-                dtype=float,
-            ))
-            for k in keys
-        ]
-        for d in metrics_all
-    ])
-
-    N, _, _ = data.shape
-    n_obs = data1.shape[0]
+    datasets = list(sic_metric_obs or []) + list(sic_metric_AllModel or [])
+    N = len(datasets)
+    n_obs = len(sic_metric_obs or [])
     group_rank = {}
     for lb in model_labels:
         if _is_group_label(lb) and lb not in group_rank:
@@ -611,18 +664,22 @@ def plot_SIC_ano(sic_metric_obs, sic_metric_AllModel, model_labels, year_range, 
         ax[ii].plot(dates, np.zeros(dates.shape),
                     **_line_zero_style(alpha=0.7))
         for jj in range(N):
+            y_vals = np.asarray(datasets[jj].get(f'{keys[ii]}_ano', np.array([])), dtype=float).reshape(-1)
+            n_use = min(dates.size, y_vals.size)
+            if n_use <= 0:
+                continue
             dataset_label = model_labels[jj] if jj < len(model_labels) else f'dataset{jj + 1}'
             label_str = dataset_label
             if jj < n_obs:
                 style = _obs_style(jj)
-                ax[ii].plot(dates, data[jj, ii, :], label=label_str, **style)
+                ax[ii].plot(dates[:n_use], y_vals[:n_use], label=label_str, **style)
             elif _is_group_label(label_str):
                 style = _group_style(group_rank.get(label_str, 0))
-                ax[ii].plot(dates, data[jj, ii, :], label=label_str, **style)
+                ax[ii].plot(dates[:n_use], y_vals[:n_use], label=label_str, **style)
             else:
                 ls, cr = _get_style(jj, n_obs, line_style, color)
                 style = {'color': cr, 'linestyle': ls, 'linewidth': _line_model_width()}
-                ax[ii].plot(dates, data[jj, ii, :], linestyle=ls, color=cr,
+                ax[ii].plot(dates[:n_use], y_vals[:n_use], linestyle=ls, color=cr,
                             lw=_line_model_width(), label=label_str, **kwargs)
             if jj >= n_obs and isinstance(model_spread_payloads, (list, tuple)):
                 spread_idx = jj - n_obs
@@ -633,7 +690,6 @@ def plot_SIC_ano(sic_metric_obs, sic_metric_AllModel, model_labels, year_range, 
                         dtype=float,
                     ).reshape(-1)
                     if s_vals.size > 0:
-                        y_vals = np.asarray(data[jj, ii, :], dtype=float).reshape(-1)
                         n_use = min(y_vals.size, s_vals.size, dates.size)
                         _plot_group_std_band(
                             ax[ii],
@@ -664,16 +720,21 @@ def plot_SIC_ano(sic_metric_obs, sic_metric_AllModel, model_labels, year_range, 
         )
 
     handles, labels_leg = ax[0].get_legend_handles_labels()
-    fig.legend(
-        handles, labels_leg,
-        loc='center left', bbox_to_anchor=(0.80, 0.5),
-        ncol=1, fontsize=max(11, _FS_LEGEND + 2), frameon=True,
-        borderaxespad=0.0,
+    _finalize_line_layout(fig, legend_location='none', pad=0.82)
+    fig.subplots_adjust(left=0.09, right=0.98, hspace=_line_subplot_hspace(0.34))
+    _place_adaptive_bottom_legend(
+        fig, ax, handles, labels_leg,
+        target_rows=3,
+        fontsize=max(9, _FS_LEGEND - 1),
+        y_gap=0.052,
     )
-    _finalize_line_layout(fig, legend_location='right', pad=0.78)
-    fig.subplots_adjust(left=0.09, right=0.78, hspace=_line_subplot_hspace(0.34))
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_SIC_map`.
+# Purpose: Handle plot SIC map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_SIC_map(grid_nc_file, data, model_labels, hms,
                  sic_range, diff_range, sic_cm='YlGnBu', diff_cm='RdBu_r',
                  unit='', sic_thre=None, plot_mode='mixed', fig_name=None, **kwargs):
@@ -843,6 +904,11 @@ def plot_SIC_map(grid_nc_file, data, model_labels, hms,
 
     _save_fig(fig_name)
 
+# -----------------------------------------------------------------------------
+# Function: `plot_trend_map`.
+# Purpose: Handle plot trend map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_trend_map(grid_nc_file, trend_data, pvalue_data, model_labels, hms,
                    trend_range, cmap='RdBu_r', unit='', plot_mode='raw',
                    fig_name=None, **kwargs):
@@ -893,8 +959,6 @@ def plot_trend_map(grid_nc_file, trend_data, pvalue_data, model_labels, hms,
 
     proj = ccrs.Stereographic(
         central_latitude=-90 if hms == 'sh' else 90, central_longitude=0)
-    _xy = proj.transform_points(ccrs.PlateCarree(), lon, lat)
-    x_proj, y_proj = _xy[..., 0], _xy[..., 1]
 
     fig, ax = plt.subplots(rows, cols, figsize=_map_figsize(cols, rows),
                            subplot_kw={'projection': proj})
@@ -967,6 +1031,11 @@ def plot_trend_map(grid_nc_file, trend_data, pvalue_data, model_labels, hms,
     _save_fig(fig_name)
 
 
+# -----------------------------------------------------------------------------
+# Function: `plot_sic_region_map`.
+# Purpose: Handle plot sic region map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def plot_sic_region_map(grid_nc_file: str, hms: str, fig_name: str = None):
     """Plot SITool sea-ice sector partition map for one hemisphere.
 

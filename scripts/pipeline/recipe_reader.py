@@ -60,6 +60,11 @@ class RecipeReader:
         ],
     }
 
+    # -----------------------------------------------------------------------------
+    # Function: `__init__`.
+    # Purpose: Handle init workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def __init__(self, eval_ex: str):
         """Initialize the recipe reader.
 
@@ -134,6 +139,11 @@ class RecipeReader:
                 model_groups=model_groups,
             )
 
+    # -----------------------------------------------------------------------------
+    # Function: `_normalize_model_groups`.
+    # Purpose: Handle normalize model groups workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _normalize_model_groups(raw_groups: Any) -> Dict[str, List[str]]:
         """Normalize common.model_groups into Dict[str, List[str]]."""
@@ -154,6 +164,11 @@ class RecipeReader:
             groups[str(group_name)] = [str(m) for m in members]
         return groups
 
+    # -----------------------------------------------------------------------------
+    # Function: `_expand_module_compact_fields`.
+    # Purpose: Handle expand module compact fields workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _expand_module_compact_fields(
         self,
         module_name: str,
@@ -209,6 +224,11 @@ class RecipeReader:
         elif template_map is not None:
             raise ValueError(f"{module_name}.model_file_templates must be a mapping.")
 
+    # -----------------------------------------------------------------------------
+    # Function: `_dedup_preserve_order`.
+    # Purpose: Handle dedup preserve order workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _dedup_preserve_order(items: List[str]) -> List[str]:
         """Deduplicate while preserving the first occurrence order."""
@@ -221,6 +241,11 @@ class RecipeReader:
             deduped.append(item)
         return deduped
 
+    # -----------------------------------------------------------------------------
+    # Function: `_resolve_module_models`.
+    # Purpose: Handle resolve module models workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _resolve_module_models(
         self,
         module_cfg: Dict[str, Any],
@@ -268,6 +293,11 @@ class RecipeReader:
 
         return [m for m in models if m not in exclude_set]
 
+    # -----------------------------------------------------------------------------
+    # Function: `_render_model_template`.
+    # Purpose: Handle render model template workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _render_model_template(
         template: str,
@@ -386,6 +416,11 @@ class RecipeReader:
                         f"Error reading time coverage from {ref_file_path}: {exc}"
                     ) from exc
 
+    # -----------------------------------------------------------------------------
+    # Function: `_validate_model_files`.
+    # Purpose: Handle validate model files workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _validate_model_files(self, module_name: str) -> Optional[List[List[str]]]:
         """Validate model data files for the specified module.
 
@@ -497,6 +532,11 @@ class RecipeReader:
 
         return file_groups if file_groups else None
 
+    # -----------------------------------------------------------------------------
+    # Function: `_validate_sitrans_options`.
+    # Purpose: Handle validate sitrans options workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _validate_sitrans_options(self, module_config: dict) -> None:
         """Validate optional SItrans algorithm parameters."""
         if not isinstance(module_config, dict):
@@ -540,6 +580,11 @@ class RecipeReader:
             if (not np.isfinite(p_sig)) or p_sig <= 0.0 or p_sig >= 1.0:
                 raise ValueError(f"SItrans trend_significance_p out of range (0, 1): {p_sig}")
 
+    # -----------------------------------------------------------------------------
+    # Function: `_validate_time_coverage_multiple`.
+    # Purpose: Handle validate time coverage multiple workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _validate_time_coverage_multiple(
         self,
         file_paths: List[str],
@@ -597,6 +642,11 @@ class RecipeReader:
 
         return covering_files, time_var_name
 
+    # -----------------------------------------------------------------------------
+    # Function: `_get_time_dimension_name`.
+    # Purpose: Handle get time dimension name workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     @staticmethod
     def _get_time_dimension_name(file_path: str) -> str:
         """Identify the time dimension name in a NetCDF file.

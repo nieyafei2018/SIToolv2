@@ -7,6 +7,11 @@ from scripts.utils import core as _core
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `rotate_vector_by_angle`.
+# Purpose: Handle rotate vector by angle workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def rotate_vector_by_angle(u: np.ndarray, v: np.ndarray, theta: np.ndarray,
                            theta_unit: str = 'auto'):
     """Rotate vector components by angle theta.
@@ -44,6 +49,11 @@ def rotate_vector_by_angle(u: np.ndarray, v: np.ndarray, theta: np.ndarray,
     v_rot = u * sin_theta + v * cos_theta
     return u_rot, v_rot
 
+# -----------------------------------------------------------------------------
+# Function: `rotate_vector_cartopy`.
+# Purpose: Handle rotate vector cartopy workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def rotate_vector_cartopy(src_crs: ccrs.CRS, target_crs: ccrs.CRS,
                           lon: np.ndarray, lat: np.ndarray,
                           u_src: np.ndarray, v_src: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -88,6 +98,11 @@ def rotate_vector_cartopy(src_crs: ccrs.CRS, target_crs: ccrs.CRS,
     u_tgt, v_tgt = target_crs.transform_vectors(src_crs, lon_arr, lat_arr, u_arr, v_arr)
     return np.asarray(u_tgt), np.asarray(v_tgt)
 
+# -----------------------------------------------------------------------------
+# Function: `rotate_vector_formula`.
+# Purpose: Handle rotate vector formula workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def rotate_vector_formula(u: np.ndarray, v: np.ndarray, hemisphere: str, lons: np.ndarray):
     """Rotate velocity vectors from geographic (lon/lat) to projection (x/y) coordinates.
 

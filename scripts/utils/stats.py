@@ -11,6 +11,88 @@ from scripts.utils.grid import gen_mask
 globals().update({k: v for k, v in _core.__dict__.items() if k not in globals()})
 
 
+# -----------------------------------------------------------------------------
+# Function: `detrended_std_1d`.
+# Purpose: Handle detrended std 1d workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def detrended_std_1d(series: np.ndarray, min_count: int = 2) -> float:
+    """Return linear-detrended standard deviation for one 1-D series.
+
+    The implementation removes a least-squares linear fit against the sample
+    index and then computes ``nanstd`` of the residuals.
+    """
+    arr = np.asarray(series, dtype=float).reshape(-1)
+    if arr.size <= 0:
+        return np.nan
+    valid = np.isfinite(arr)
+    if int(np.sum(valid)) < max(2, int(min_count)):
+        return np.nan
+    y = arr[valid]
+    x = np.arange(arr.size, dtype=float)[valid]
+    try:
+        slope, intercept = np.polyfit(x, y, 1)
+    except Exception:
+        return np.nan
+    residual = y - (slope * x + intercept)
+    out = float(np.nanstd(residual))
+    return out if np.isfinite(out) else np.nan
+
+
+# -----------------------------------------------------------------------------
+# Function: `detrended_std_map`.
+# Purpose: Handle detrended std map workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def detrended_std_map(field_ts: np.ndarray, min_count: int = 2) -> np.ndarray:
+    """Return per-grid detrended STD map from a 3-D time series field.
+
+    Args:
+        field_ts: Array with shape ``[time, x, y]``.
+        min_count: Minimum number of finite samples per cell.
+    """
+    arr = np.asarray(field_ts, dtype=float)
+    if arr.ndim != 3:
+        raise ValueError("field_ts must be a 3-D array [time, x, y].")
+    _, nx, ny = arr.shape
+    out = np.full((nx, ny), np.nan, dtype=float)
+    for jx in range(nx):
+        for jy in range(ny):
+            out[jx, jy] = detrended_std_1d(arr[:, jx, jy], min_count=min_count)
+    return out
+
+
+# -----------------------------------------------------------------------------
+# Function: `lin2021_error_ratio`.
+# Purpose: Handle lin2021 error ratio workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def lin2021_error_ratio(
+    model_errors: np.ndarray,
+    obs_uncertainty: np.ndarray,
+    eps: float = 1e-9,
+) -> np.ndarray:
+    """Return Lin et al. (2021) style normalized errors.
+
+    Formula:
+        ``|E_model| / max(|E_obs2|, eps)``
+    """
+    data = np.asarray(model_errors, dtype=float)
+    base = np.asarray(obs_uncertainty, dtype=float)
+    if data.ndim != 2:
+        raise ValueError("model_errors must be 2-D [n_models, n_metrics].")
+    base = base.reshape(-1)
+    if data.shape[1] != base.size:
+        raise ValueError("obs_uncertainty size must match the number of metrics.")
+    denom = np.where(np.abs(base) < float(eps), float(eps), np.abs(base))
+    return np.abs(data) / denom[np.newaxis, :]
+
+
+# -----------------------------------------------------------------------------
+# Function: `_runtime_tmpdir`.
+# Purpose: Handle runtime tmpdir workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _runtime_tmpdir() -> str:
     """Resolve active temporary directory with case-level override."""
     preferred = str(os.environ.get('SITOOL_CASE_TMPDIR', '')).strip()
@@ -23,6 +105,11 @@ def _runtime_tmpdir() -> str:
     return resolved
 
 
+# -----------------------------------------------------------------------------
+# Function: `MatrixDiff`.
+# Purpose: Handle MatrixDiff workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def MatrixDiff(array1: np.ndarray, array2: np.ndarray, weights: np.ndarray = None,
                metric: str = 'MAE', mask: bool = False):
     """
@@ -47,19 +134,26 @@ def MatrixDiff(array1: np.ndarray, array2: np.ndarray, weights: np.ndarray = Non
     4.5197977
     """
     use_mask = bool(mask)
+    arr1 = np.asarray(array1, dtype=float)
+    arr2 = np.asarray(array2, dtype=float)
+
+    if arr1.shape != arr2.shape:
+        raise ValueError('Error: Input arrays and weights must have the same shape!')
 
     # Build a spatial mask: exclude cells where both arrays are zero (ice-free)
     # or where either array contains NaN
     if use_mask:
-        mask = gen_mask(array1, array2)
+        mask = gen_mask(arr1, arr2)
     else:
-        mask = np.ones(array1.shape)
+        mask = np.ones(arr1.shape, dtype=float)
 
     if weights is None:
-        weights = np.ones(array1.shape)
+        weights = np.ones(arr1.shape, dtype=float)
+    else:
+        weights = np.asarray(weights, dtype=float)
 
     # Flatten to 1-D for vectorised operations
-    array1, array2 = np.array(array1).reshape(-1, ), np.array(array2).reshape(-1, )
+    array1, array2 = arr1.reshape(-1, ), arr2.reshape(-1, )
     weights, mask = np.array(weights).reshape(-1, ), np.array(mask).reshape(-1, )
 
     if (array1.shape != array2.shape) or (array1.shape != weights.shape):
@@ -83,11 +177,18 @@ def MatrixDiff(array1: np.ndarray, array2: np.ndarray, weights: np.ndarray = Non
         return np.sqrt(np.sum((x - y) ** 2 * weights * mask) / np.sum(weights * mask))
     elif metric == 'Corr':
         # Weighted Pearson correlation
+        if x.size < 2:
+            return {'weighted_corr': np.nan, 'p_value': np.nan}
         weighted_corr, p_value = pearsonr(x * weights, y * weights)
         return {'weighted_corr': weighted_corr, 'p_value': p_value}
     else:
         raise ValueError(f'Error: The statistical metric must be one of the "Bias", "MAE", "RMSE", and "Corr"!')
 
+# -----------------------------------------------------------------------------
+# Function: `median_filter`.
+# Purpose: Handle median filter workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def median_filter(A, n):
     """
     Purpose
@@ -140,6 +241,11 @@ def median_filter(A, n):
 
     return C
 
+# -----------------------------------------------------------------------------
+# Function: `ll_dist_matrix`.
+# Purpose: Handle ll dist matrix workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def ll_dist_matrix(lon, lat):
     """Compute cumulative distance matrices in the x and y directions for a 2-D grid (Haversine formula).
 
@@ -160,6 +266,11 @@ def ll_dist_matrix(lon, lat):
     hx = np.full((nx, ny), np.nan)
     hy = np.full((nx, ny), np.nan)
 
+    # -----------------------------------------------------------------------------
+    # Function: `ll_distance_hav`.
+    # Purpose: Handle ll distance hav workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def ll_distance_hav(lat0, lng0, lat1, lng1):
         """
         Calculate distance between (lng0, lat0) and (lng1, lat1)
@@ -197,6 +308,11 @@ def ll_dist_matrix(lon, lat):
 
     return hx, hy
 
+# -----------------------------------------------------------------------------
+# Function: `xy_gradient`.
+# Purpose: Handle xy gradient workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def xy_gradient(A, h, direc):
     """Compute the spatial gradient of 2-D field A along the specified direction (central differencing).
 
@@ -250,6 +366,11 @@ _SECTOR_DEFINITIONS: Dict[str, List[Tuple[str, str]]] = {
 }
 
 
+# -----------------------------------------------------------------------------
+# Function: `get_hemisphere_sectors`.
+# Purpose: Handle get hemisphere sectors workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def get_hemisphere_sectors(hms: str, include_all: bool = True) -> List[str]:
     """Return supported sector keys for one hemisphere.
 
@@ -267,6 +388,11 @@ def get_hemisphere_sectors(hms: str, include_all: bool = True) -> List[str]:
     return [s for s in sectors if s != 'All']
 
 
+# -----------------------------------------------------------------------------
+# Function: `get_sector_label`.
+# Purpose: Handle get sector label workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def get_sector_label(hms: str, sector: str) -> str:
     """Return human-readable label for a sector key."""
     h = str(hms or '').lower()
@@ -278,6 +404,11 @@ def get_sector_label(hms: str, sector: str) -> str:
     return s
 
 
+# -----------------------------------------------------------------------------
+# Function: `region_index`.
+# Purpose: Handle region index workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def region_index(grid_file, hms, sector='All'):
     """
     Purpose
@@ -364,6 +495,11 @@ def region_index(grid_file, hms, sector='All'):
 
     return np.asarray(index, dtype=bool)
 
+# -----------------------------------------------------------------------------
+# Function: `adaptive_row_col`.
+# Purpose: Handle adaptive row col workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def adaptive_row_col(N: int) -> tuple:
     """Compute a compact (rows, cols) layout for N subplots.
 
@@ -387,6 +523,11 @@ def adaptive_row_col(N: int) -> tuple:
         rows = math.ceil(N / cols)
     return rows, cols
 
+# -----------------------------------------------------------------------------
+# Function: `extract_grid`.
+# Purpose: Handle extract grid workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def extract_grid(nc_file, lon_name, lat_name, grid_file):
     """
 
@@ -431,6 +572,11 @@ def extract_grid(nc_file, lon_name, lat_name, grid_file):
 
     return lon, lat
 
+# -----------------------------------------------------------------------------
+# Function: `cal_ss_clim`.
+# Purpose: Handle cal ss clim workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def cal_ss_clim(data, season_dict, threshold=None):
     """Calculate seasonal climatology means.
 
@@ -475,6 +621,11 @@ def cal_ss_clim(data, season_dict, threshold=None):
 
     return seasonal_clim
 
+# -----------------------------------------------------------------------------
+# Function: `cal_ss_clim_cdo`.
+# Purpose: Handle cal ss clim cdo workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def cal_ss_clim_cdo(data_file, var, ss_num, threshold=None):
     """Calculate seasonal climatology means using CDO.
 
@@ -513,19 +664,237 @@ def cal_ss_clim_cdo(data_file, var, ss_num, threshold=None):
 
     return data2
 
+# -----------------------------------------------------------------------------
+# Function: `build_remap_weights`.
+# Purpose: Pre-compute and cache CDO remap weight files so that repeated calls
+#          for the same (source-grid, target-grid, method) triple reuse the
+#          weights without re-computing them.
+#
+# Weight caching rationale
+# ------------------------
+# CDO remapbil/remapcon recalculates the interpolation weights from scratch on
+# every call, even when the source and target grids are identical across
+# segments of the same model.  For a high-resolution model (e.g. EC-Earth3P-HR
+# with ~512×512 grid points) this weight computation alone takes several
+# minutes per call.  When a model is split into N annual segments, the same
+# weight matrix is recomputed N times unnecessarily.
+#
+# This function generates a weight file once using CDO gen{bil,con} and caches
+# it under a deterministic path derived from the source-grid fingerprint and
+# target-grid path.  Subsequent calls with the same key return the cached path
+# immediately.  The cache is process-local (dict in module scope) and also
+# uses an on-disk file so different worker threads/processes in the same run
+# share the same pre-computed weights via the filesystem.
+#
+# Thread safety: a per-key threading.Lock ensures only one thread builds the
+# weight file; all others block until it is ready, then reuse it.
+#
+# Can be disabled by setting env SITOOL_REMAP_WEIGHT_CACHE=0.
+# -----------------------------------------------------------------------------
+
+import hashlib as _hashlib
+import threading as _threading
+
+_WEIGHT_CACHE_LOCK_MAP: Dict[str, '_threading.Lock'] = {}
+_WEIGHT_CACHE_LOCK_MAP_GUARD = _threading.Lock()
+_WEIGHT_CACHE_BUILT: Dict[str, str] = {}  # key -> weight_file_path
+
+
+def _weight_cache_key(grid_file: str, source_file: str, method: str, cdo_instance: Cdo) -> str:
+    """Compute a stable cache key for a (source-grid, target-grid, method) triple.
+
+    The source-grid fingerprint is derived from ``cdo griddes`` output so that
+    any change to grid type, size, or coordinates invalidates the cache.
+    The target-grid path is normalised to an absolute path.
+    """
+    try:
+        griddes = cdo_instance.griddes(input=os.path.abspath(source_file))
+        if isinstance(griddes, list):
+            griddes_str = '\n'.join(str(x) for x in griddes)
+        else:
+            griddes_str = str(griddes)
+        # Keep only lines that describe the grid topology (not data values).
+        relevant = [
+            ln for ln in griddes_str.splitlines()
+            if any(tok in ln for tok in ('gridtype', 'gridsize', 'xsize', 'ysize',
+                                          'xfirst', 'yfirst', 'xinc', 'yinc',
+                                          'grid_mapping', 'gridID'))
+        ]
+        src_fingerprint = _hashlib.md5('\n'.join(relevant).encode()).hexdigest()[:12]
+    except Exception:
+        # Fallback: use file size as a coarser fingerprint.
+        try:
+            src_fingerprint = str(os.path.getsize(os.path.abspath(source_file)))
+        except Exception:
+            src_fingerprint = 'unknown'
+    tgt_norm = os.path.abspath(grid_file)
+    tgt_hash = _hashlib.md5(tgt_norm.encode()).hexdigest()[:8]
+    return f'{src_fingerprint}_{tgt_hash}_{method}'
+
+
+def build_remap_weights(
+    grid_file: str,
+    source_file: str,
+    weight_dir: str,
+    cdo_instance: Cdo,
+    method: str = 'bilinear',
+) -> Optional[str]:
+    """Build (or retrieve cached) CDO remap weight file.
+
+    Args:
+        grid_file:   Target grid description file (.txt).
+        source_file: A representative source file whose grid will be used for
+                     weight computation.  Any segment of the same model works.
+        weight_dir:  Directory where weight files are stored.
+        cdo_instance: CDO instance (used for griddes and gen{bil,con}).
+        method:      Interpolation method ('bilinear' or 'conservative').
+
+    Returns:
+        Absolute path to the weight file, or None if weight generation failed
+        or caching is disabled (callers then fall back to direct remapbil/con).
+    """
+    cache_enabled = str(
+        os.environ.get('SITOOL_REMAP_WEIGHT_CACHE', 'auto')
+    ).strip().lower() not in {'0', 'false', 'no', 'off'}
+    if not cache_enabled:
+        return None
+
+    method_norm = str(method or 'bilinear').strip().lower()
+    if method_norm in {'bilinear', 'bil', 'remapbil'}:
+        method_norm = 'bilinear'
+    elif method_norm in {'conservative', 'con', 'remapcon'}:
+        method_norm = 'conservative'
+    else:
+        return None
+
+    key = _weight_cache_key(grid_file, source_file, method_norm, cdo_instance)
+
+    # Fast path: already built in this process.
+    if key in _WEIGHT_CACHE_BUILT:
+        cached = _WEIGHT_CACHE_BUILT[key]
+        if os.path.exists(cached):
+            return cached
+
+    # Acquire a per-key lock so only one thread/process builds the file.
+    with _WEIGHT_CACHE_LOCK_MAP_GUARD:
+        if key not in _WEIGHT_CACHE_LOCK_MAP:
+            _WEIGHT_CACHE_LOCK_MAP[key] = _threading.Lock()
+        key_lock = _WEIGHT_CACHE_LOCK_MAP[key]
+
+    with key_lock:
+        # Re-check after acquiring lock (another thread may have finished).
+        if key in _WEIGHT_CACHE_BUILT:
+            cached = _WEIGHT_CACHE_BUILT[key]
+            if os.path.exists(cached):
+                return cached
+
+        os.makedirs(weight_dir, exist_ok=True)
+        weight_file = os.path.join(weight_dir, f'remap_weights_{key}.nc')
+
+        # On-disk cache: if another process already wrote this file, reuse it.
+        if os.path.exists(weight_file) and os.path.getsize(weight_file) > 0:
+            _WEIGHT_CACHE_BUILT[key] = weight_file
+            return weight_file
+
+        _tmp_probe: Optional[str] = None
+        try:
+            src_abs = os.path.abspath(source_file)
+
+            def _gen_weights(src: str) -> None:
+                """Run genbil (or gencon fallback) from *src* into weight_file."""
+                if method_norm == 'bilinear':
+                    try:
+                        cdo_instance.genbil(grid_file, input=src, output=weight_file)
+                    except Exception as e:
+                        err = str(e)
+                        if 'unstructured source grids' in err.lower():
+                            logger.info(
+                                "Remap weight cache: bilinear weights failed for unstructured "
+                                "grid (%s); generating conservative weights instead.",
+                                os.path.basename(source_file),
+                            )
+                            cdo_instance.gencon(grid_file, input=src, output=weight_file)
+                        elif 'Unsupported generic coordinates' in err:
+                            var_match = re.search(r'Variable:\s*([^)\s!]+)', err)
+                            if not var_match:
+                                raise
+                            bad_var = var_match.group(1).strip()
+                            logger.info(
+                                "Remap weight cache: stripping auxiliary variable '%s' "
+                                "from probe file and retrying weight generation (%s).",
+                                bad_var, os.path.basename(source_file),
+                            )
+                            nonlocal _tmp_probe
+                            fd, _tmp_probe = tempfile.mkstemp(
+                                suffix='.nc', prefix='sitool_wprobe_',
+                                dir=_runtime_tmpdir(),
+                            )
+                            os.close(fd)
+                            cdo_instance.delvar(bad_var, input=src, output=_tmp_probe)
+                            _gen_weights(_tmp_probe)
+                        else:
+                            raise
+                else:
+                    cdo_instance.gencon(grid_file, input=src, output=weight_file)
+
+            _gen_weights(src_abs)
+
+            if os.path.exists(weight_file) and os.path.getsize(weight_file) > 0:
+                logger.info(
+                    "Built remap weight cache: method=%s key=%s -> %s",
+                    method_norm, key, os.path.basename(weight_file),
+                )
+                _WEIGHT_CACHE_BUILT[key] = weight_file
+                return weight_file
+
+        except Exception as exc:
+            logger.warning(
+                "Failed to build remap weight cache for %s (method=%s): %s. "
+                "Falling back to direct remapbil/remapcon.",
+                os.path.basename(source_file), method_norm, exc,
+            )
+            try:
+                if os.path.exists(weight_file):
+                    os.remove(weight_file)
+            except OSError:
+                pass
+        finally:
+            if _tmp_probe and os.path.exists(_tmp_probe):
+                try:
+                    os.remove(_tmp_probe)
+                except OSError:
+                    pass
+
+    return None
+
+
+# -----------------------------------------------------------------------------
+# Function: `stable_interpolation`.
+# Purpose: Handle stable interpolation workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def stable_interpolation(grid_file: str, input_file: str, output_file: str, cdo_instance: Cdo,
                          method: str = 'bilinear',
-                         allow_fallback: bool = True) -> None:
+                         allow_fallback: bool = True,
+                         weight_file: Optional[str] = None) -> None:
     """Perform robust spatial interpolation with error handling.
 
     Args:
-        grid_file: Target grid file for interpolation
-        input_file: Input file to be interpolated
-        output_file: Output file path
-        cdo_instance: CDO instance for operations
+        grid_file:    Target grid file for interpolation.
+        input_file:   Input file to be interpolated.
+        output_file:  Output file path.
+        cdo_instance: CDO instance for operations.
+        method:       Interpolation method ('bilinear' or 'conservative').
+        allow_fallback: Try conservative remapping when bilinear fails.
+        weight_file:  Pre-computed CDO weight file path (from
+                      ``build_remap_weights``).  When provided and valid,
+                      CDO remap is dispatched via ``cdo remap`` using the
+                      cached weights, which skips weight re-computation and
+                      can be 3-10× faster for high-resolution grids.
+                      Pass None to fall back to the standard remapbil/remapcon.
 
     Raises:
-        ValueError: If interpolation fails after all attempts
+        ValueError: If interpolation fails after all attempts.
     """
     method_norm = str(method or 'bilinear').strip().lower()
     if method_norm in {'bilinear', 'bil', 'remapbil'}:
@@ -541,10 +910,40 @@ def stable_interpolation(grid_file: str, input_file: str, output_file: str, cdo_
     current_input = input_file
     _tmp_delvar = None  # process-unique temp file created only if needed
 
+    # Validate weight file: must exist and be non-empty.  An invalid path is
+    # silently ignored so callers never have to guard against stale cache entries.
+    use_weight_file = (
+        weight_file is not None
+        and os.path.exists(weight_file)
+        and os.path.getsize(weight_file) > 0
+    )
+
     try:
         while True:
             try:
-                # Use absolute paths to ensure CDO can find files
+                if use_weight_file:
+                    # Use pre-computed weights via CDO remap operator.  This skips
+                    # the weight-computation phase (the dominant cost for HR grids)
+                    # and only applies the pre-built weight matrix.
+                    try:
+                        cdo_instance.remap(
+                            f'{grid_file},{weight_file}',
+                            input=current_input,
+                            output=output_file,
+                        )
+                        break
+                    except Exception as weight_err:
+                        # Weight file may be stale or corrupt; fall back to direct
+                        # remap and log a warning so the operator can inspect.
+                        logger.warning(
+                            "Cached weight remap failed for %s (%s); "
+                            "falling back to direct remapbil/remapcon.",
+                            os.path.basename(input_file), weight_err,
+                        )
+                        use_weight_file = False
+                        continue
+
+                # Standard path: CDO computes weights on-the-fly.
                 if method_norm == 'conservative':
                     cdo_instance.remapcon(grid_file, input=current_input, output=output_file)
                 else:
@@ -591,6 +990,9 @@ def stable_interpolation(grid_file: str, input_file: str, output_file: str, cdo_
             os.remove(_tmp_delvar)
 
 __all__ = [
+    "detrended_std_1d",
+    "detrended_std_map",
+    "lin2021_error_ratio",
     "MatrixDiff",
     "median_filter",
     "ll_dist_matrix",
@@ -602,5 +1004,6 @@ __all__ = [
     "extract_grid",
     "cal_ss_clim",
     "cal_ss_clim_cdo",
+    "build_remap_weights",
     "stable_interpolation",
 ]

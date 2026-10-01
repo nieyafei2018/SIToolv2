@@ -128,7 +128,7 @@ global:
 
   output:
     # Final image save options for all figures
-    dpi: 320
+    dpi: 100
     bbox_inches: tight
 
 SIconc:

@@ -6,6 +6,11 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 
 
+# -----------------------------------------------------------------------------
+# Function: `infer_source_frame_from_attrs`.
+# Purpose: Handle infer source frame from attrs workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def infer_source_frame_from_attrs(u_attrs: Dict, v_attrs: Dict) -> Tuple[Optional[str], str]:
     """Infer vector source frame from CF/metadata text.
 
@@ -15,6 +20,11 @@ def infer_source_frame_from_attrs(u_attrs: Dict, v_attrs: Dict) -> Tuple[Optiona
       frame: one of {'xy', 'lonlat', None}
     """
 
+    # -----------------------------------------------------------------------------
+    # Function: `_merged_text`.
+    # Purpose: Handle merged text workflow for the current execution path.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
     def _merged_text(attrs: Dict) -> str:
         if not attrs:
             return ""
@@ -47,6 +57,11 @@ def infer_source_frame_from_attrs(u_attrs: Dict, v_attrs: Dict) -> Tuple[Optiona
     return None, "no decisive metadata"
 
 
+# -----------------------------------------------------------------------------
+# Function: `resolve_source_frame`.
+# Purpose: Handle resolve source frame workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def resolve_source_frame(
     requested: Optional[str],
     inferred: Optional[str],
@@ -75,6 +90,11 @@ def resolve_source_frame(
     return req, "recipe"
 
 
+# -----------------------------------------------------------------------------
+# Function: `grid_kind_from_lonlat`.
+# Purpose: Handle grid kind from lonlat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def grid_kind_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> str:
     """Classify grid as structured or unstructured based on lon/lat shapes."""
     lon_arr = np.asarray(lon)
@@ -88,11 +108,21 @@ def grid_kind_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> str:
     return "unknown"
 
 
+# -----------------------------------------------------------------------------
+# Function: `_wrap_delta_lon_deg`.
+# Purpose: Handle wrap delta lon deg workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _wrap_delta_lon_deg(dlon_deg: np.ndarray) -> np.ndarray:
     """Wrap longitude increments to [-180, 180] in degrees."""
     return (dlon_deg + 180.0) % 360.0 - 180.0
 
 
+# -----------------------------------------------------------------------------
+# Function: `_normalize_components`.
+# Purpose: Handle normalize components workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def _normalize_components(east: np.ndarray, north: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     mag = np.hypot(east, north)
     east_u = np.full_like(east, np.nan, dtype=float)
@@ -103,6 +133,11 @@ def _normalize_components(east: np.ndarray, north: np.ndarray) -> Tuple[np.ndarr
     return east_u, north_u
 
 
+# -----------------------------------------------------------------------------
+# Function: `estimate_structured_basis_from_lonlat`.
+# Purpose: Handle estimate structured basis from lonlat workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def estimate_structured_basis_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> Tuple[Dict[str, np.ndarray], Dict[str, float]]:
     """Estimate local native-grid basis vectors in east/north components.
 
@@ -168,6 +203,11 @@ def estimate_structured_basis_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> T
     return basis, qc
 
 
+# -----------------------------------------------------------------------------
+# Function: `rotate_native_xy_to_eastnorth`.
+# Purpose: Handle rotate native xy to eastnorth workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def rotate_native_xy_to_eastnorth(u: np.ndarray, v: np.ndarray, basis: Dict[str, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
     """Rotate native x/y vector components into east/north using a basis field."""
     u_arr = np.asarray(u, dtype=float)
@@ -200,6 +240,11 @@ def rotate_native_xy_to_eastnorth(u: np.ndarray, v: np.ndarray, basis: Dict[str,
     return u_east, v_north
 
 
+# -----------------------------------------------------------------------------
+# Function: `rotate_by_angle`.
+# Purpose: Handle rotate by angle workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
 def rotate_by_angle(u: np.ndarray, v: np.ndarray, theta: np.ndarray, theta_unit: str = "auto") -> Tuple[np.ndarray, np.ndarray]:
     """Rotate native x/y vectors by angle theta into east/north.
 
