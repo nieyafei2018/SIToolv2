@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use SITool v2.0 in your research, please cite the software using the metadata below."
+title: "Sea Ice Evaluation Tool (SITool) v2.0"
+type: software
+version: 2.0.0
+abstract: >-
+  SITool v2.0 is a Python-based, process-oriented evaluation toolkit for
+  polar sea-ice simulations and CMIP-like model output. It integrates
+  diagnostics for sea-ice concentration, drift, thickness, snow depth,
+  concentration and mass budgets, and seasonal transition dates in a
+  configurable workflow with parallel execution and HTML reporting.
+authors:
+  - family-names: "Nie"
+    given-names: "Yafei"
+    orcid: "https://orcid.org/0009-0002-3077-4579"
+    affiliation: "School of Atmospheric Sciences, Sun Yat-sen University, and Southern Marine Science and Engineering Guangdong Laboratory (Zhuhai)"
+license: Apache-2.0
+repository-code: "https://github.com/nieyafei2018/SIToolv2"
+url: "https://github.com/nieyafei2018/SIToolv2"
+keywords:
+  - sea ice
+  - model evaluation
+  - process-oriented diagnostics
+  - CMIP
+  - HighResMIP
+  - polar climate
+  - climate model evaluation
+  - Python
