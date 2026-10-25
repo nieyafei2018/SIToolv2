@@ -454,6 +454,7 @@ def main() -> None:
     # 2) selected_jobs > 1: dynamic task dispatcher over all (hemisphere, module)
     #    tasks. Real CPU utilization is sampled at runtime and used as feedback
     #    to increase task concurrency when the machine appears under-utilized.
+    failed_tasks = []
     if selected_jobs == 1:
         logger.info(
             "Single-thread scheduler enabled (hemisphere-major): hemispheres=%s, modules=%s",
@@ -485,6 +486,7 @@ def main() -> None:
                         context=f'{hms.upper()}/{module}',
                     )
                 except Exception:
+                    failed_tasks.append(f'{hms.upper()}/{module}')
                     logger.error("[%s/%s] FAILED (see log)", hms.upper(), module, exc_info=True)
     else:
         all_tasks: List[Tuple[str, str]] = []
@@ -835,6 +837,7 @@ def main() -> None:
                             context=f'{hms.upper()}/{module_name}',
                         )
                     except Exception:
+                        failed_tasks.append(f'{hms.upper()}/{module_name}')
                         logger.error("[%s/%s] FAILED (see log)", hms.upper(), module_name, exc_info=True)
 
     build_unified_cache = str(os.environ.get('SITOOL_BUILD_UNIFIED_CACHE', '0')).strip().lower() in {
@@ -894,6 +897,9 @@ def main() -> None:
 
     _cleanup_case_tmpdir(case_tmp_dir)
 
+    if failed_tasks:
+        logger.error("SIToolv2 failed tasks: %s", ', '.join(failed_tasks))
+        sys.exit(1)
     logger.info("SIToolv2 finished.")
 
 

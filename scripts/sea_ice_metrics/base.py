@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from scipy import stats
+from scripts.utils.netcdf_io import open_netcdf_dataset
 
 from scripts import SITOOL_NC_COMPRESS_LEVEL, SITOOL_NC_SHUFFLE
 
@@ -67,7 +68,7 @@ class SeaIceMetricsBase:
         if not os.path.exists(grid_file):
             raise FileNotFoundError(f"Grid file not found: {grid_file}")
 
-        with xr.open_dataset(grid_file) as ds:
+        with open_netcdf_dataset(grid_file) as ds:
             self.lon = np.array(ds['lon'])
             self.lat = np.array(ds['lat'])
             self.cell_area = np.array(ds['cell_area'])

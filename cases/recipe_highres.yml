@@ -48,17 +48,17 @@ variables:
       - CNRM-CM6-1-HR
       - EC-Earth3P-HR
       - ECMWF-IFS-HR
+      - ECMWF-IFS-MR
       - HadGEM3-GC31-HM
       - MPI-ESM1-2-HR
+      - HadGEM3-GC31-MM
+      - MPI-ESM1-2-XR
       LR:
       - AWI-CM-1-1-LR
       - CNRM-CM6-1
       - EC-Earth3P
       - ECMWF-IFS-LR
-      - ECMWF-IFS-MR
       - HadGEM3-GC31-LL
-      - HadGEM3-GC31-MM
-      - MPI-ESM1-2-XR
       ALL:
       - AWI-CM-1-1-HR
       - AWI-CM-1-1-LR
@@ -202,6 +202,8 @@ variables:
   #      SICB      #
   ##################
   SICB:
+    # Spatial smoothing window for sea-ice velocity (positive odd integer).
+    spatial_smoothing_window: 3
     # Chose observation references
     ref_nh_sic:
     - NSIDC_CDR_siconc_daily_nh_19790101-20241231.nc

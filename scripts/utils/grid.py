@@ -459,7 +459,7 @@ def _add_land_mask(ds: xr.Dataset, etopo_file: str, grid_path: str,
         cdo.setrtoc2(-1e6, 0, 1, 0, input=t1, output=t2)
         cdo.remapbil(f'{grid_path}{grid_filename}.txt', input=t2, output=t3)
         cdo.setrtoc2(0, 0.99, 0, 1, input=t3, output=t4)
-        with xr.open_dataset(t4) as ds2:
+        with open_netcdf_dataset(t4) as ds2:
             z = np.array(ds2['z'])
     ds['land_sea_mask'] = xr.DataArray(z, dims=('x', 'y'),
                                        attrs={'long_name': 'ocean/land mask',
@@ -485,7 +485,7 @@ def _add_region_mask(ds: xr.Dataset, region_mask_file: str,
     with tempfile.TemporaryDirectory(prefix='sitool_rm_', dir=_runtime_tmpdir()) as _tmp:
         t2 = os.path.join(_tmp, 'temp2.nc')
         cdo.remapnn(f'{grid_path}{grid_filename}.txt', input=region_mask_file, output=t2)
-        with xr.open_dataset(t2) as ds2:
+        with open_netcdf_dataset(t2) as ds2:
             try:
                 sea_ice_region = np.array(ds2['sea_ice_region'])
             except KeyError:

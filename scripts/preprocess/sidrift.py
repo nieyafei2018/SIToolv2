@@ -53,7 +53,7 @@ class SidriftPrepMixin:
                 logger.warning("Angle file not found: %s", angle_file)
                 return None, 'file_missing'
 
-        with xr.open_dataset(angle_file) as ds_ang:
+        with utils.open_netcdf_dataset(angle_file) as ds_ang:
             if angle_var is None:
                 data_vars = list(ds_ang.data_vars)
                 if not data_vars:
@@ -80,6 +80,65 @@ class SidriftPrepMixin:
                 theta = np.deg2rad(theta)
                 return theta, 'loaded_degree'
             return theta, f'loaded_{unit}'
+
+    # -----------------------------------------------------------------------------
+    # Function: `_try_mrotuvb_rotation`.
+    # Purpose: Rotate native staggered (Arakawa C-grid) u/v to east/north via CDO's mrotuvb.
+    # Maintenance: Keep input/output schema stable for upstream and downstream callers.
+    # -----------------------------------------------------------------------------
+    def _try_mrotuvb_rotation(
+        self,
+        u_sel: str,
+        v_sel: str,
+        seg_dir: str,
+        worker_cdo: Any,
+        model_u_key: str,
+        model_v_key: str,
+    ) -> Optional[Tuple[str, str]]:
+        """Rotate native x/y vectors to east/north using CDO's ``mrotuvb`` operator.
+
+        Some models (e.g. MPI-ESM/MPIOM) report u and v on different staggered
+        Arakawa C-grid points (distinct coordinate arrays per component) rather
+        than a shared cell-center grid. A plain lon/lat finite-difference basis
+        estimated from one component's grid is therefore slightly mislocated for
+        the other, and — more importantly — such tripolar ocean/sea-ice grids
+        have a coordinate "north fold" line that a naive non-periodic finite
+        difference cannot represent, which was found to suppress the mean
+        circulation's rotational component (e.g. the Beaufort Gyre) after
+        rotation. CDO's ``mrotuvb`` is a purpose-built operator for exactly this
+        MPIOM grid family: it interpolates u/v to shared cell centers and
+        rotates them into true latitudinal/longitudinal directions in one step.
+
+        Returns (u_en_path, v_en_path) on success, or None if ``mrotuvb`` is not
+        applicable/fails, so the caller can fall back to the generic gradient
+        basis method.
+        """
+        combined = os.path.join(seg_dir, 'mrotuvb_combined.nc')
+        try:
+            worker_cdo.mrotuvb(input=f'{u_sel} {v_sel}', output=combined)
+        except Exception as exc:
+            logger.info("mrotuvb rotation not applicable/failed (%s); using gradient basis.", exc)
+            return None
+
+        if not (os.path.exists(combined) and os.path.getsize(combined) > 0):
+            return None
+
+        try:
+            with utils.open_netcdf_dataset(combined) as ds_c:
+                if model_u_key not in ds_c.variables or model_v_key not in ds_c.variables:
+                    logger.warning(
+                        "mrotuvb output missing expected variables '%s'/'%s'; using gradient basis.",
+                        model_u_key, model_v_key,
+                    )
+                    return None
+                u_en = os.path.join(seg_dir, 'u_en.nc')
+                v_en = os.path.join(seg_dir, 'v_en.nc')
+                utils.write_netcdf_compressed(ds_c[[model_u_key]], u_en)
+                utils.write_netcdf_compressed(ds_c[[model_v_key]], v_en)
+            return u_en, v_en
+        except Exception as exc:
+            logger.warning("Failed to split mrotuvb output (%s); using gradient basis.", exc)
+            return None
 
     # -----------------------------------------------------------------------------
     # Function: `prep_sidrift_models`.
@@ -359,7 +418,7 @@ class SidriftPrepMixin:
                         self._safe_seldate(worker_cdo, start_date, end_date, u_current, u_sel)
                         self._safe_seldate(worker_cdo, start_date, end_date, v_current, v_sel)
 
-                        with xr.open_dataset(u_sel) as ds_u, xr.open_dataset(v_sel) as ds_v:
+                        with utils.open_netcdf_dataset(u_sel) as ds_u, utils.open_netcdf_dataset(v_sel) as ds_v:
                             if model_u_key not in ds_u.variables or model_v_key not in ds_v.variables:
                                 raise ValueError(
                                     f"Missing SIdrift variables in segment files: {u_sel}, {v_sel}"
@@ -383,6 +442,7 @@ class SidriftPrepMixin:
                             v_en = os.path.join(seg_dir, 'v_en.nc')
                             theta, theta_state = self._load_angle_field(angle_spec, tuple(lon.shape))
                             use_angle = theta is not None
+                            basis_qc: Optional[Dict[str, float]] = None
 
                             if effective == 'lonlat' and not use_angle:
                                 src_rot = 'input_eastnorth'
@@ -403,20 +463,39 @@ class SidriftPrepMixin:
                                 utils.write_netcdf_compressed(ds_u_out, u_en)
                                 utils.write_netcdf_compressed(ds_v_out, v_en)
                             elif effective == 'xy' and gkind == 'structured':
-                                src_rot = 'structured_basis_lonlat_gradient'
-                                basis, _qc = vr.estimate_structured_basis_from_lonlat(lon, lat)
-                                u_raw = self._mask_missing(np.array(ds_u[model_u_key]), u_attrs)
-                                v_raw = self._mask_missing(np.array(ds_v[model_v_key]), v_attrs)
-                                u_east, v_north = vr.rotate_native_xy_to_eastnorth(u_raw, v_raw, basis)
+                                lon_v, lat_v = self._extract_lon_lat_arrays(ds_v)
+                                is_staggered_uv_grid = (
+                                    lon_v.shape == lon.shape
+                                    and lat_v.shape == lat.shape
+                                    and not (
+                                        np.allclose(lon, lon_v, equal_nan=True)
+                                        and np.allclose(lat, lat_v, equal_nan=True)
+                                    )
+                                )
+                                mrotuvb_result = (
+                                    self._try_mrotuvb_rotation(
+                                        u_sel, v_sel, seg_dir, worker_cdo, model_u_key, model_v_key,
+                                    )
+                                    if is_staggered_uv_grid else None
+                                )
+                                if mrotuvb_result is not None:
+                                    src_rot = 'mrotuvb_mpiom_backward_rotation'
+                                    u_en, v_en = mrotuvb_result
+                                else:
+                                    src_rot = 'structured_basis_lonlat_gradient'
+                                    basis, basis_qc = vr.estimate_structured_basis_from_lonlat(lon, lat)
+                                    u_raw = self._mask_missing(np.array(ds_u[model_u_key]), u_attrs)
+                                    v_raw = self._mask_missing(np.array(ds_v[model_v_key]), v_attrs)
+                                    u_east, v_north = vr.rotate_native_xy_to_eastnorth(u_raw, v_raw, basis)
 
-                                ds_u_out = ds_u.copy(deep=False)
-                                ds_v_out = ds_v.copy(deep=False)
-                                ds_u_out[model_u_key] = (ds_u[model_u_key].dims, u_east.astype(np.float32))
-                                ds_v_out[model_v_key] = (ds_v[model_v_key].dims, v_north.astype(np.float32))
-                                ds_u_out[model_u_key].attrs = dict(ds_u[model_u_key].attrs)
-                                ds_v_out[model_v_key].attrs = dict(ds_v[model_v_key].attrs)
-                                utils.write_netcdf_compressed(ds_u_out, u_en)
-                                utils.write_netcdf_compressed(ds_v_out, v_en)
+                                    ds_u_out = ds_u.copy(deep=False)
+                                    ds_v_out = ds_v.copy(deep=False)
+                                    ds_u_out[model_u_key] = (ds_u[model_u_key].dims, u_east.astype(np.float32))
+                                    ds_v_out[model_v_key] = (ds_v[model_v_key].dims, v_north.astype(np.float32))
+                                    ds_u_out[model_u_key].attrs = dict(ds_u[model_u_key].attrs)
+                                    ds_v_out[model_v_key].attrs = dict(ds_v[model_v_key].attrs)
+                                    utils.write_netcdf_compressed(ds_u_out, u_en)
+                                    utils.write_netcdf_compressed(ds_v_out, v_en)
                             else:
                                 src_rot = 'assume_eastnorth_unstructured'
                                 worker_cdo.setmissval(-9999, input=u_sel, output=u_en)
@@ -444,7 +523,7 @@ class SidriftPrepMixin:
 
                         u_xy = os.path.join(seg_dir, 'u_xy.nc')
                         v_xy = os.path.join(seg_dir, 'v_xy.nc')
-                        with xr.open_dataset(u_interp) as ds_ui, xr.open_dataset(v_interp) as ds_vi:
+                        with utils.open_netcdf_dataset(u_interp) as ds_ui, utils.open_netcdf_dataset(v_interp) as ds_vi:
                             u_i = self._mask_missing(np.array(ds_ui[model_u_key]), dict(ds_ui[model_u_key].attrs))
                             v_i = self._mask_missing(np.array(ds_vi[model_v_key]), dict(ds_vi[model_v_key].attrs))
                             lon_i, _lat_i = self._extract_lon_lat_arrays(ds_ui)
@@ -477,6 +556,7 @@ class SidriftPrepMixin:
                             'grid_kind': gkind,
                             'source_rotation': src_rot,
                             'metadata_override': bool(override_flag),
+                            'basis_qc': basis_qc,
                         }
 
                     # P8 (sidrift) — pre-compute remap weight file once per model
@@ -523,6 +603,7 @@ class SidriftPrepMixin:
                             seg_idx, _, _ = seg_task
                             seg_results[seg_idx] = _process_one_segment(seg_task)
 
+                    basis_qc_rows: List[Dict[str, float]] = []
                     for seg_idx in sorted(seg_results.keys()):
                         seg_payload = seg_results[seg_idx]
                         u_chunks.append(seg_payload['u_xy'])
@@ -534,6 +615,8 @@ class SidriftPrepMixin:
                         src_rot_set.add(seg_payload['source_rotation'])
                         if seg_payload['metadata_override']:
                             override_count += 1
+                        if seg_payload.get('basis_qc'):
+                            basis_qc_rows.append(seg_payload['basis_qc'])
 
                     if not u_chunks or not v_chunks:
                         logger.warning("    No valid processed chunks for %s", model_name)
@@ -590,7 +673,7 @@ class SidriftPrepMixin:
                         os.replace(staged_v_path, os.path.abspath(out_v_path))
 
                 logger.info("Created: %s / %s", out_u_name, out_v_name)
-                return {
+                result_row: Dict[str, Any] = {
                     'model_index': midx,
                     'model_name': model_name,
                     'status': 'created',
@@ -604,6 +687,14 @@ class SidriftPrepMixin:
                     'source_rotation_methods': sorted(src_rot_set),
                     'metadata_override_count': int(override_count),
                 }
+                if basis_qc_rows:
+                    result_row['basis_qc_summary'] = {
+                        'max_mean_abs_dot': max(float(r.get('mean_abs_dot', 0.0)) for r in basis_qc_rows),
+                        'min_valid_fraction': min(float(r.get('valid_fraction', 1.0)) for r in basis_qc_rows),
+                        'periodic_x': sorted({bool(r.get('periodic_x')) for r in basis_qc_rows}),
+                        'periodic_y': sorted({bool(r.get('periodic_y')) for r in basis_qc_rows}),
+                    }
+                return result_row
             except Exception as exc:
                 logger.error("Failed to preprocess SIdrift model %s (%s).", model_name, exc, exc_info=True)
                 return {
@@ -706,6 +797,11 @@ class SidriftPrepMixin:
         except Exception as exc:
             logger.warning("Failed to write SIdrift audit file (%s).", exc)
 
+        failures = [row for row in ordered_rows if str(row.get('status', '')).startswith('failed')]
+        if failures:
+            details = '; '.join(f"{row['model_name']}: {row.get('error', row['status'])}"
+                                for row in failures)
+            raise RuntimeError(f'SIdrift preprocessing failed: {details}')
         return out_u_files, out_v_files, audit_rows
 
 __all__ = [

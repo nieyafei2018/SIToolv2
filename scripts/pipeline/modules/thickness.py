@@ -355,14 +355,27 @@ def _thickness_seasonal_diagnostics(
 
     thick_clim = np.asarray(metric_dict.get('thick_clim', np.array([])), dtype=float)
     uni_mon = np.asarray(metric_dict.get('uni_mon', np.arange(1, 13)), dtype=int).reshape(-1)
-    if thick_clim.ndim == 3 and thick_clim.shape[0] == uni_mon.size and uni_mon.size > 0:
+    if thick_clim.ndim == 3 and thick_clim.shape[0] > 0:
+        if thick_clim.shape[0] == 12:
+            # Cached payloads densify sparse monthly climatologies to a fixed
+            # Jan-Dec layout (index i -> calendar month i+1) without updating
+            # uni_mon, so index by calendar month directly instead of matching
+            # against the (possibly stale) uni_mon list.
+            thick_month_to_idx = {mm: mm - 1 for mm in range(1, 13)}
+        elif thick_clim.shape[0] == uni_mon.size and uni_mon.size > 0:
+            thick_month_to_idx = {int(mm): idx for idx, mm in enumerate(uni_mon)}
+        else:
+            thick_month_to_idx = {}
         maps = []
         weights = []
         for mm in months:
-            idx = np.where(uni_mon == int(mm))[0]
-            if idx.size <= 0:
+            idx = thick_month_to_idx.get(int(mm))
+            if idx is None:
                 continue
-            maps.append(np.asarray(thick_clim[int(idx[0])], dtype=float))
+            field = np.asarray(thick_clim[idx], dtype=float)
+            if not np.any(np.isfinite(field)):
+                continue
+            maps.append(field)
             weights.append(float(DAYS_PER_MONTH[int(mm) - 1]))
         if maps:
             maps_arr = np.asarray(maps, dtype=float)
@@ -371,14 +384,20 @@ def _thickness_seasonal_diagnostics(
                 out['clim_map'] = np.nansum(maps_arr * w[:, None, None], axis=0) / np.sum(w)
 
     vol_clim = np.asarray(metric_dict.get('Vol_clim', np.array([])), dtype=float).reshape(-1)
-    if vol_clim.size == uni_mon.size and vol_clim.size > 0:
+    if vol_clim.size > 0:
+        if vol_clim.size == 12:
+            vol_month_to_idx = {mm: mm - 1 for mm in range(1, 13)}
+        elif vol_clim.size == uni_mon.size:
+            vol_month_to_idx = {int(mm): idx for idx, mm in enumerate(uni_mon)}
+        else:
+            vol_month_to_idx = {}
         vals = []
         weights = []
         for mm in months:
-            idx = np.where(uni_mon == int(mm))[0]
-            if idx.size <= 0:
+            idx = vol_month_to_idx.get(int(mm))
+            if idx is None:
                 continue
-            vv = float(vol_clim[int(idx[0])])
+            vv = float(vol_clim[idx])
             if np.isfinite(vv):
                 vals.append(vv)
                 weights.append(float(DAYS_PER_MONTH[int(mm) - 1]))
@@ -578,15 +597,30 @@ def _thickness_extract_month_extended_stats(
     uni2 = np.asarray(s2.get('uni_mon', np.array([])), dtype=int).reshape(-1)
     vc1 = np.asarray(s1.get('Vol_clim', np.array([])), dtype=float).reshape(-1)
     vc2 = np.asarray(s2.get('Vol_clim', np.array([])), dtype=float).reshape(-1)
+    # Cached payloads densify sparse Vol_clim to 12 calendar-month slots
+    # without updating uni_mon; index by calendar month directly in that
+    # case instead of matching against the (possibly stale) uni_mon list.
+    if vc1.size == 12:
+        vc1_month_to_idx = {mm: mm - 1 for mm in range(1, 13)}
+    elif vc1.size > 0 and uni1.size == vc1.size:
+        vc1_month_to_idx = {int(mm): idx for idx, mm in enumerate(uni1)}
+    else:
+        vc1_month_to_idx = {}
+    if vc2.size == 12:
+        vc2_month_to_idx = {mm: mm - 1 for mm in range(1, 13)}
+    elif vc2.size > 0 and uni2.size == vc2.size:
+        vc2_month_to_idx = {int(mm): idx for idx, mm in enumerate(uni2)}
+    else:
+        vc2_month_to_idx = {}
     for mtag, _mlabel, month_num in candidates:
         # Use monthly climatological volume difference for the month table's
         # "Vol Mean Diff" to represent absolute-state mismatch in that month.
-        if not np.isfinite(vol_mean_diff) and uni1.size > 0 and uni2.size > 0 and vc1.size > 0 and vc2.size > 0:
-            idx1 = np.where(uni1 == int(month_num))[0]
-            idx2 = np.where(uni2 == int(month_num))[0]
-            if idx1.size > 0 and idx2.size > 0:
-                v1m = vc1[int(idx1[0])]
-                v2m = vc2[int(idx2[0])]
+        if not np.isfinite(vol_mean_diff):
+            idx1 = vc1_month_to_idx.get(int(month_num))
+            idx2 = vc2_month_to_idx.get(int(month_num))
+            if idx1 is not None and idx2 is not None:
+                v1m = vc1[idx1]
+                v2m = vc2[idx2]
                 if np.isfinite(v1m) and np.isfinite(v2m):
                     vol_mean_diff = abs(float(v1m) - float(v2m))
 
@@ -723,12 +757,21 @@ def _thickness_extract_month_absolute_stats(
                     except Exception:
                         vol_trend = np.nan
     else:
+        # Cached payloads densify sparse Vol_clim to 12 calendar-month slots
+        # without updating uni_mon; index by calendar month directly in that
+        # case instead of matching against the (possibly stale) uni_mon list.
+        if vol_clim.size == 12:
+            vol_month_to_idx = {mm: mm - 1 for mm in range(1, 13)}
+        elif vol_clim.size > 0 and uni_mon.size == vol_clim.size:
+            vol_month_to_idx = {int(mm): idx for idx, mm in enumerate(uni_mon)}
+        else:
+            vol_month_to_idx = {}
         candidates = _thickness_month_candidates(int(month))
         for mtag, _mlabel, mnum in candidates:
-            if not np.isfinite(vol_mean) and vol_clim.size > 0 and uni_mon.size == vol_clim.size:
-                idx = np.where(uni_mon == int(mnum))[0]
-                if idx.size > 0:
-                    vv = vol_clim[int(idx[0])]
+            if not np.isfinite(vol_mean):
+                idx = vol_month_to_idx.get(int(mnum))
+                if idx is not None:
+                    vv = vol_clim[idx]
                     if np.isfinite(vv):
                         vol_mean = float(vv)
             vol_ano_mon = np.asarray(metric_dict.get(f'Vol_ano_{mtag}', np.array([])), dtype=float).squeeze()
@@ -1185,9 +1228,17 @@ def _adaptive_sit_map_ranges(
             continue
         uni_mon = np.asarray(metric.get('uni_mon', np.array([])), dtype=int)
         clim = np.asarray(metric.get('thick_clim', np.array([])), dtype=float)
-        if clim.ndim != 3 or uni_mon.size == 0 or month_i not in uni_mon:
+        if clim.ndim != 3:
             continue
-        m_idx = int(np.where(uni_mon == month_i)[0][0])
+        # Cached payloads densify sparse thick_clim to 12 calendar-month slots
+        # without updating uni_mon; index by calendar month directly in that
+        # case instead of matching position within the (possibly stale) uni_mon list.
+        if clim.shape[0] == 12:
+            m_idx = month_i - 1
+        elif uni_mon.size > 0 and month_i in uni_mon:
+            m_idx = int(np.where(uni_mon == month_i)[0][0])
+        else:
+            continue
         field = np.asarray(clim[m_idx], dtype=float)
         if field.ndim != 2:
             continue
@@ -2762,6 +2813,44 @@ def eval_sndepth(case_name: str, recipe: RR.RecipeReader,
             model_labels=list(base_matched_labels_for_ts),
             group_specs=matched_group_specs,
         )
+
+    if group_specs and diff_dicts:
+        model_metric_payloads = [
+            d.get('thick2_metric') if isinstance(d, dict) else None
+            for d in diff_dicts
+        ]
+        _grouped_models, grouped_diffs, grouped_labels, group_labels = _build_group_mean_payloads(
+            model_payloads=model_metric_payloads,
+            diff_payloads=diff_dicts,
+            model_labels=list(model_labels_used),
+            group_specs=group_specs,
+        )
+        diff_dicts = list(grouped_diffs or [])
+        model_labels_used = list(grouped_labels)
+        if group_labels:
+            logger.info(
+                "Enabled metric-level group means for %s [%s]: %s",
+                module, hemisphere.upper(), ', '.join(group_labels),
+            )
+
+    if matched_group_specs and matched_diff_dicts:
+        matched_model_payloads = [
+            d.get('thick2_metric') if isinstance(d, dict) else None
+            for d in matched_diff_dicts
+        ]
+        _matched_grouped_models, grouped_matched_diffs, grouped_matched_labels, matched_group_labels = _build_group_mean_payloads(
+            model_payloads=matched_model_payloads,
+            diff_payloads=matched_diff_dicts,
+            model_labels=list(matched_model_labels_used),
+            group_specs=matched_group_specs,
+        )
+        matched_diff_dicts = list(grouped_matched_diffs or [])
+        matched_model_labels_used = list(grouped_matched_labels)
+        if matched_group_labels:
+            logger.info(
+                "Enabled metric-level matched group means for %s [%s]: %s",
+                module, hemisphere.upper(), ', '.join(matched_group_labels),
+            )
 
     if diff_dicts:
         logger.info('Generating figures ...')

@@ -188,7 +188,7 @@ class ObsModelPrepMixin:
                             sel_expr, obs_file, sel_err,
                         )
                         try:
-                            with xr.open_dataset(t2) as ds_sel:
+                            with utils.open_netcdf_dataset(t2) as ds_sel:
                                 existing = [v for v in keep_obs_vars if v in ds_sel.data_vars]
                                 if existing:
                                     ds_keep = ds_sel[existing]
@@ -578,7 +578,7 @@ class ObsModelPrepMixin:
             """
             if not os.path.exists(src_path):
                 return False
-            with xr.open_dataset(src_path) as ds_src:
+            with utils.open_netcdf_dataset(src_path) as ds_src:
                 ds_work = ds_src
                 if preferred_var and preferred_var in ds_work.data_vars:
                     ds_work = ds_work[[preferred_var]]
@@ -753,7 +753,7 @@ class ObsModelPrepMixin:
                                     if not os.path.exists(src_path):
                                         return False
                                     _stat_inc('segment_xarray_fallback', 1)
-                                    with xr.open_dataset(src_path) as ds_src:
+                                    with utils.open_netcdf_dataset(src_path) as ds_src:
                                         ds_work = ds_src
                                         if 'time' in ds_work.coords or 'time' in ds_work.dims:
                                             ds_work = ds_work.sel(time=slice(start_date, end_date))
@@ -1549,7 +1549,7 @@ class ObsModelPrepMixin:
                                 try:
                                     nan_fill_v = float(nan_fill_raw)
                                     nan_fill_tmp = staged_output + '.nanfill.nc'
-                                    with xr.open_dataset(staged_output) as _ds:
+                                    with utils.open_netcdf_dataset(staged_output) as _ds:
                                         _ds_out = _ds.copy()
                                         if model_target_var and model_target_var in _ds_out.data_vars:
                                             _ds_out[model_target_var] = _ds_out[model_target_var].fillna(nan_fill_v)

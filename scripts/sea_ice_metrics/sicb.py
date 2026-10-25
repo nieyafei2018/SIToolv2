@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 # 1 => seasonal/monthly budget climatologies use a common-valid mask across
 #      dadt/adv/div/res before temporal aggregation.
 _SICB_COMMON_VALID_AGGREGATION = 1
+_SICB_DEFAULT_SPATIAL_SMOOTHING_WINDOW = 3
+_SICB_DEFAULT_SIC_THRESHOLD = 0.0
 
 
 class SICBMetrics(SeaIceMetricsBase):
@@ -88,7 +90,8 @@ class SICBMetrics(SeaIceMetricsBase):
     def Cal_SIC_budget(self, sic_file: str, sic_key: str, u_file: str, u_key: str, v_file: str, v_key: str,
                        hemisphere: str,
                        rotate: bool = False,
-                       ngrid_filter: int = 3, sic_threshold: int = 15,
+                       ngrid_filter: int = _SICB_DEFAULT_SPATIAL_SMOOTHING_WINDOW,
+                       sic_threshold: float = _SICB_DEFAULT_SIC_THRESHOLD,
                        time_frequency: str = 'daily',
                        jobs: int = 1,
                        output_folder: Optional[str] = './',
@@ -107,8 +110,8 @@ class SICBMetrics(SeaIceMetricsBase):
             u_key: Variable name for u-component of velocity.
             v_key: Variable name for v-component of velocity.
             rotate_func: Optional function to rotate velocity vectors.
-            ngrid_filter: Size of ice velocity filter (default: 3x3).
-            sic_threshold: SIC threshold for valid ice motion ('15%').
+            ngrid_filter: Size of the ice velocity spatial smoothing window (default: 3x3).
+            sic_threshold: Internal SIC threshold for valid ice motion (default: 0%).
             time_frequency: Temporal frequency ('daily' or 'monthly').
             jobs: Number of timestep worker threads for SICB inner splitting.
             output_folder: Directory for output files.
@@ -160,6 +163,8 @@ class SICBMetrics(SeaIceMetricsBase):
             expected_norm = int(bool(normalize_by_valid_days))
             expected_ridging = 1
             expected_common_valid = int(_SICB_COMMON_VALID_AGGREGATION)
+            expected_filter = int(ngrid_filter)
+            expected_threshold = float(sic_threshold)
 
             # -----------------------------------------------------------------------------
             # Function: `_read_flag`.
@@ -168,11 +173,18 @@ class SICBMetrics(SeaIceMetricsBase):
             # -----------------------------------------------------------------------------
             def _read_flag(path: str, key: str, default: int = 0) -> int:
                 try:
-                    with xr.open_dataset(path) as ds_tmp:
+                    with utils.open_netcdf_dataset(path) as ds_tmp:
                         raw = ds_tmp.attrs.get(key, default)
                         return int(raw)
                 except Exception:
                     return int(default)
+
+            def _read_number(path: str, key: str, default: float = np.nan) -> float:
+                try:
+                    with utils.open_netcdf_dataset(path) as ds_tmp:
+                        return float(ds_tmp.attrs.get(key, default))
+                except Exception:
+                    return float(default)
 
             seas_norm = _read_flag(seas_clim_file, 'sicb_normalized_by_valid_days', 0)
             mon_norm = _read_flag(mon_clim_file, 'sicb_normalized_by_valid_days', 0)
@@ -181,8 +193,25 @@ class SICBMetrics(SeaIceMetricsBase):
             mon_ridging = _read_flag(mon_clim_file, 'sicb_ridging_enabled', 0)
             seas_common_valid = _read_flag(seas_clim_file, 'sicb_common_valid_aggregation', 0)
             mon_common_valid = _read_flag(mon_clim_file, 'sicb_common_valid_aggregation', 0)
+            daily_filter = _read_number(daily_budget_file, 'sicb_spatial_smoothing_window')
+            seas_filter = _read_number(seas_clim_file, 'sicb_spatial_smoothing_window')
+            mon_filter = _read_number(mon_clim_file, 'sicb_spatial_smoothing_window')
+            daily_threshold = _read_number(daily_budget_file, 'sicb_sic_threshold')
+            seas_threshold = _read_number(seas_clim_file, 'sicb_sic_threshold')
+            mon_threshold = _read_number(mon_clim_file, 'sicb_sic_threshold')
+            filter_matches = all(
+                np.isfinite(value) and int(value) == expected_filter
+                for value in (daily_filter, seas_filter, mon_filter)
+            )
+            threshold_matches = all(
+                np.isfinite(value)
+                and np.isclose(value, expected_threshold, rtol=0.0, atol=1e-12)
+                for value in (daily_threshold, seas_threshold, mon_threshold)
+            )
             if (
-                seas_norm == expected_norm
+                filter_matches
+                and threshold_matches
+                and seas_norm == expected_norm
                 and mon_norm == expected_norm
                 and daily_ridging == expected_ridging
                 and seas_ridging == expected_ridging
@@ -197,9 +226,13 @@ class SICBMetrics(SeaIceMetricsBase):
                 return seas_clim_file, mon_clim_file
             logger.info(
                 "Recomputing SICB outputs due to metadata mismatch: "
+                "filter expected=%d(daily=%s, seas=%s, mon=%s), "
+                "threshold expected=%.3f(daily=%s, seas=%s, mon=%s), "
                 "norm expected=%d(seas=%d, mon=%d), "
                 "ridging expected=%d(daily=%d, seas=%d, mon=%d), "
                 "common-valid expected=%d(seas=%d, mon=%d)",
+                expected_filter, daily_filter, seas_filter, mon_filter,
+                expected_threshold, daily_threshold, seas_threshold, mon_threshold,
                 expected_norm, seas_norm, mon_norm,
                 expected_ridging, daily_ridging, seas_ridging, mon_ridging,
                 expected_common_valid, seas_common_valid, mon_common_valid,
@@ -217,7 +250,11 @@ class SICBMetrics(SeaIceMetricsBase):
 
         # Calculate seasonal and monthly climatologies
         seas_clim_file, mon_clim_file = self._calculate_climatologies(
-            daily_budget_file, save_prefix, normalize_by_valid_days=normalize_by_valid_days
+            daily_budget_file,
+            save_prefix,
+            ngrid_filter=ngrid_filter,
+            sic_threshold=sic_threshold,
+            normalize_by_valid_days=normalize_by_valid_days,
         )
 
         elapsed_time = time.time() - start_time
@@ -232,7 +269,7 @@ class SICBMetrics(SeaIceMetricsBase):
     # -----------------------------------------------------------------------------
     def _calculate_daily_budget_components(self, sic_file: str, sic_key: str, u_file: str, u_key: str, v_file: str, v_key: str,
                                            rotate: bool,
-                                           ngrid_filter: int, sic_threshold: int,
+                                           ngrid_filter: int, sic_threshold: float,
                                            time_frequency: str, jobs: int, output_folder: str,
                                            output_label: str,
                                            valid_mask: Optional[np.ndarray] = None) -> str:
@@ -243,7 +280,7 @@ class SICBMetrics(SeaIceMetricsBase):
         # Keep all input datasets open for the entire computation scope.
         # This avoids using a closed xarray Dataset object outside its context,
         # which can trigger unstable backend re-open behavior under parallel runs.
-        with xr.open_dataset(sic_file) as ds_sic, xr.open_dataset(u_file) as ds_u, xr.open_dataset(v_file) as ds_v:
+        with utils.open_netcdf_dataset(sic_file) as ds_sic, utils.open_netcdf_dataset(u_file) as ds_u, utils.open_netcdf_dataset(v_file) as ds_v:
             # Load all required fields to NumPy arrays once so timestep workers
             # never touch NetCDF backends in parallel.
             lon, lat = np.array(ds_sic['lon']), np.array(ds_sic['lat'])
@@ -348,7 +385,7 @@ class SICBMetrics(SeaIceMetricsBase):
                         v_filtered = utils.median_filter(v[tt], ngrid_filter)
 
                         # Mask velocity where SIC is below threshold (no meaningful ice motion)
-                        invalid_mask = sic_current < sic_threshold
+                        invalid_mask = ~np.isfinite(sic_current) | (sic_current <= sic_threshold)
                         u_filtered[invalid_mask] = np.nan
                         v_filtered[invalid_mask] = np.nan
 
@@ -430,7 +467,7 @@ class SICBMetrics(SeaIceMetricsBase):
             #   (2) residual < 0
             #   (3) divergence > 0
             # Ice-covered denominator follows SIC threshold used by SICB motion filtering.
-            ice_mask = np.isfinite(sic) & (sic >= float(sic_threshold))
+            ice_mask = np.isfinite(sic) & (sic > float(sic_threshold))
             ridging_mask = (
                 ice_mask
                 & np.isfinite(res_daily)
@@ -452,6 +489,7 @@ class SICBMetrics(SeaIceMetricsBase):
                 div=div_daily,
                 res=res_daily,
                 ridging_ratio=ridging_ratio_daily,
+                ngrid_filter=ngrid_filter,
                 sic_threshold=sic_threshold,
                 output_folder=output_folder,
                 output_label=output_label,
@@ -500,7 +538,7 @@ class SICBMetrics(SeaIceMetricsBase):
                 kwargs: Dict[str, object] = {'mode': 'w'}
                 if encoding:
                     kwargs['encoding'] = encoding
-                ds_out.to_netcdf(tmp_path, **kwargs)
+                utils.write_netcdf_dataset(ds_out, tmp_path, **kwargs)
                 os.replace(tmp_path, output_file)
                 return
             except PermissionError:
@@ -528,7 +566,8 @@ class SICBMetrics(SeaIceMetricsBase):
                                dadt: np.ndarray, adv: np.ndarray,
                                div: np.ndarray, res: np.ndarray,
                                ridging_ratio: np.ndarray,
-                               sic_threshold: int,
+                               ngrid_filter: int,
+                               sic_threshold: float,
                                output_folder: str,
                                output_label: str) -> str:
         """Create NetCDF dataset with budget components."""
@@ -575,6 +614,8 @@ class SICBMetrics(SeaIceMetricsBase):
             ),
         }
         ds_out.attrs.update({
+            'sicb_spatial_smoothing_window': int(ngrid_filter),
+            'sicb_sic_threshold': float(sic_threshold),
             'sicb_ridging_enabled': 1,
             'sicb_ridging_ice_threshold': float(sic_threshold),
             'sicb_ridging_definition': 'sic>90%,res<0,div>0',
@@ -593,6 +634,8 @@ class SICBMetrics(SeaIceMetricsBase):
         self,
         daily_file: str,
         save_prefix: str,
+        ngrid_filter: int,
+        sic_threshold: float,
         normalize_by_valid_days: bool = False,
     ) -> Tuple[str, str]:
         """Compute seasonal and monthly climatologies from one daily SICB file.
@@ -759,6 +802,8 @@ class SICBMetrics(SeaIceMetricsBase):
                 ds_seasonal['ridging_mask'] = ridging_mask
 
             ds_seasonal.attrs.update({
+                'sicb_spatial_smoothing_window': int(ngrid_filter),
+                'sicb_sic_threshold': float(sic_threshold),
                 'sicb_normalized_by_valid_days': int(bool(normalize_by_valid_days)),
                 'sicb_ridging_enabled': 1,
                 'sicb_common_valid_aggregation': int(_SICB_COMMON_VALID_AGGREGATION),
@@ -823,6 +868,8 @@ class SICBMetrics(SeaIceMetricsBase):
                 ds_monthly['ridging_ratio_mean'] = ridging_monthly_mean
 
             ds_monthly.attrs.update({
+                'sicb_spatial_smoothing_window': int(ngrid_filter),
+                'sicb_sic_threshold': float(sic_threshold),
                 'sicb_normalized_by_valid_days': int(bool(normalize_by_valid_days)),
                 'sicb_ridging_enabled': 1,
                 'sicb_common_valid_aggregation': int(_SICB_COMMON_VALID_AGGREGATION),
@@ -838,12 +885,12 @@ class SICBMetrics(SeaIceMetricsBase):
         for attempt in range(1, max_attempts + 1):
             try:
                 if attempt == 1:
-                    with xr.open_dataset(daily_file) as ds_daily:
+                    with utils.open_netcdf_dataset(daily_file) as ds_daily:
                         _build_and_write(ds_daily)
                 else:
                     # Fallback path for rare transient NetCDF backend handle issues:
                     # eagerly load once, then compute climatologies from in-memory arrays.
-                    with xr.open_dataset(daily_file) as ds_daily:
+                    with utils.open_netcdf_dataset(daily_file) as ds_daily:
                         ds_mem = ds_daily.load()
                     _build_and_write(ds_mem)
                 break
@@ -905,7 +952,7 @@ class SICBMetrics(SeaIceMetricsBase):
         """
         logger.info("Calculating SICB metrics for %s ...", sicb_file)
 
-        with xr.open_dataset(sicb_file) as ds:
+        with utils.open_netcdf_dataset(sicb_file) as ds:
             dadt = np.array(ds['dadt'])
             adv = np.array(ds['adv'])
             div = np.array(ds['div'])
@@ -1031,7 +1078,7 @@ class SICBMetrics(SeaIceMetricsBase):
 
             return float(np.nanmean(monthly_vals))
 
-        with xr.open_dataset(mon_clim_file) as ds:
+        with utils.open_netcdf_dataset(mon_clim_file) as ds:
             total_3d = _to_3d(ds['dadt'])
             dyn_3d = _to_3d(ds['adv'] + ds['div'])
             therm_3d = _to_3d(ds['res'])
@@ -1086,7 +1133,7 @@ class SICBMetrics(SeaIceMetricsBase):
             # percent × area integration to 10^6 km^2/month
             return float(np.nansum(term_map[valid] * self.cell_area_km2[valid]) / 100.0 / 1e6)
 
-        with xr.open_dataset(seas_clim_file) as ds:
+        with utils.open_netcdf_dataset(seas_clim_file) as ds:
             dadt = np.array(ds['dadt'], dtype=float)
             adv = np.array(ds['adv'], dtype=float)
             div = np.array(ds['div'], dtype=float)
@@ -1230,7 +1277,7 @@ class SICBMetrics(SeaIceMetricsBase):
             # Convert percent to fraction and integrate area.
             return np.nansum(arr * (self.cell_area_km2 / 100.0)[np.newaxis, :, :], axis=(1, 2)) / 1e6
 
-        with xr.open_dataset(obs_mon_clim_file) as obs_ds, xr.open_dataset(target_mon_clim_file) as tgt_ds:
+        with utils.open_netcdf_dataset(obs_mon_clim_file) as obs_ds, utils.open_netcdf_dataset(target_mon_clim_file) as tgt_ds:
             obs_dyn = obs_ds['adv'] + obs_ds['div']
             tgt_dyn = tgt_ds['adv'] + tgt_ds['div']
 
@@ -1301,10 +1348,10 @@ class SICBMetrics(SeaIceMetricsBase):
 
         """
         # === Read data ===
-        with xr.open_dataset(sicb1_file) as ds:
+        with utils.open_netcdf_dataset(sicb1_file) as ds:
             dadt1, adv1, div1, res1 = np.array(ds['dadt']), np.array(ds['adv']), np.array(ds['div']), np.array(
                 ds['res'])
-        with xr.open_dataset(sicb2_file) as ds:
+        with utils.open_netcdf_dataset(sicb2_file) as ds:
             dadt2, adv2, div2, res2 = np.array(ds['dadt']), np.array(ds['adv']), np.array(ds['div']), np.array(
                 ds['res'])
 

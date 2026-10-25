@@ -350,9 +350,17 @@ class RecipeReader:
         file_groups = self._validate_model_files(module_name)
         if module_name == 'SItrans':
             self._validate_sitrans_options(self.variables[module_name])
+        if module_name == 'SICB':
+            self._validate_sicb_options(self.variables[module_name])
 
         logger.info("%s validation completed.", module_name)
         return file_groups
+
+    def get_sicb_spatial_smoothing_window(self) -> int:
+        """Return the validated SICB spatial smoothing window size."""
+        return self._parse_sicb_spatial_smoothing_window(
+            self.variables.get('SICB', {})
+        )
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -579,6 +587,41 @@ class RecipeReader:
                 ) from exc
             if (not np.isfinite(p_sig)) or p_sig <= 0.0 or p_sig >= 1.0:
                 raise ValueError(f"SItrans trend_significance_p out of range (0, 1): {p_sig}")
+
+    @staticmethod
+    def _parse_sicb_spatial_smoothing_window(module_config: dict) -> int:
+        """Parse the optional SICB spatial smoothing window."""
+        raw_value = module_config.get('spatial_smoothing_window', 3)
+        if isinstance(raw_value, bool):
+            raise ValueError(
+                "SICB spatial_smoothing_window must be a positive odd integer, "
+                f"got {raw_value!r}"
+            )
+        try:
+            numeric_value = float(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "SICB spatial_smoothing_window must be a positive odd integer, "
+                f"got {raw_value!r}"
+            ) from exc
+        if not np.isfinite(numeric_value) or not numeric_value.is_integer():
+            raise ValueError(
+                "SICB spatial_smoothing_window must be a positive odd integer, "
+                f"got {raw_value!r}"
+            )
+        window_size = int(numeric_value)
+        if window_size < 1 or window_size % 2 == 0:
+            raise ValueError(
+                "SICB spatial_smoothing_window must be a positive odd integer, "
+                f"got {window_size}"
+            )
+        return window_size
+
+    def _validate_sicb_options(self, module_config: dict) -> None:
+        """Validate optional SICB algorithm parameters."""
+        if not isinstance(module_config, dict):
+            return
+        self._parse_sicb_spatial_smoothing_window(module_config)
 
     # -----------------------------------------------------------------------------
     # Function: `_validate_time_coverage_multiple`.

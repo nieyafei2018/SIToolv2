@@ -273,7 +273,7 @@ class DataPreprocessorBase:
     @staticmethod
     def _xarray_monmean(input_file: str, output_file: str) -> None:
         """Fallback monthly mean computation with xarray."""
-        with xr.open_dataset(input_file) as ds_in:
+        with utils.open_netcdf_dataset(input_file) as ds_in:
             ds_mon = ds_in.resample(time='MS').mean(keep_attrs=True)
             utils.write_netcdf_compressed(ds_mon, output_file)
 
@@ -286,7 +286,7 @@ class DataPreprocessorBase:
     def _xarray_seldate(input_file: str, output_file: str,
                         start_date: str, end_date: str) -> None:
         """Fallback time slicing with xarray."""
-        with xr.open_dataset(input_file) as ds_in:
+        with utils.open_netcdf_dataset(input_file) as ds_in:
             ds_sel = ds_in.sel(time=slice(start_date, end_date))
             utils.write_netcdf_compressed(ds_sel, output_file)
 
@@ -299,7 +299,7 @@ class DataPreprocessorBase:
     def _dataset_time_size(path: str) -> Optional[int]:
         """Return time-axis length for one dataset; None if unavailable/unreadable."""
         try:
-            with xr.open_dataset(path, decode_times=False) as ds:
+            with utils.open_netcdf_dataset(path, decode_times=False) as ds:
                 if 'time' in ds.sizes:
                     return int(ds.sizes['time'])
                 if 'time' in ds.dims:

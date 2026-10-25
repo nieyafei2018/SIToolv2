@@ -388,7 +388,7 @@ class SIconcMetrics(SeaIceMetricsBase):
 
         nt = siconc.shape[0]
         SIA_ts = np.array([
-            np.nansum((siconc[jt, :, :] / 100 * self.cell_area) * (siconc[jt, :, :] > 15))
+            np.nansum(siconc[jt, :, :] / 100 * self.cell_area)
             for jt in range(nt)
         ]) / 1e12
         SIE_ts = np.array([
@@ -470,11 +470,11 @@ class SIconcMetrics(SeaIceMetricsBase):
         logger.info("Processing %d time steps ...", nt)
 
         # --- Compute area-integrated metrics at each time step (units: 10^6 km^2) ---
-        # SIA: sea ice area    = Σ(SIC/100 × cell_area), cells with SIC > 15% only
+        # SIA: sea ice area    = Σ(SIC/100 × cell_area)
         # SIE: sea ice extent  = Σ(cell_area),           cells with SIC > 15% only
         # MIZ: marginal ice zone area = Σ(cell_area),    15% < SIC < 90%
         # PIA: pack ice area   = Σ(cell_area),           SIC ≥ 90%
-        SIA_ts = np.array([np.nansum((siconc[jt, :, :] / 100 * self.cell_area) * (siconc[jt, :, :] > 15)) for jt in
+        SIA_ts = np.array([np.nansum(siconc[jt, :, :] / 100 * self.cell_area) for jt in
                            range(nt)]) / 1e12
         SIE_ts = np.array([np.nansum((siconc[jt, :, :] > 15) * self.cell_area) for jt in range(nt)]) / 1e12
         MIZ_ts = np.array([np.nansum(((siconc[jt, :, :] > 15) & (siconc[jt, :, :] < 90)) * self.cell_area)

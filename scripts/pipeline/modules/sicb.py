@@ -14,6 +14,8 @@ from scripts.pipeline.modules.common import (
     _reuse_processed_inputs_for_recalculate,
 )
 
+_SICB_FIXED_SIC_THRESHOLD = 0.0
+
 
 # -----------------------------------------------------------------------------
 # Function: `eval_sicb`.
@@ -39,10 +41,18 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
     _log_module_header(module)
 
     module_vars = recipe.variables[module]
+    spatial_smoothing_window = recipe.get_sicb_spatial_smoothing_window()
+    sic_threshold = _SICB_FIXED_SIC_THRESHOLD
     hemisphere = recipe.hemisphere
     year_sta, year_end = _get_year_range(module_vars)
     date_start = f"{year_sta}-01-01"
     date_end = f"{year_end}-12-31"
+    logger.info(
+        "SICB algorithm parameters: spatial_smoothing=%dx%d, sic_threshold=%.1f%%",
+        spatial_smoothing_window,
+        spatial_smoothing_window,
+        sic_threshold,
+    )
     plot_opts = _load_plot_options(case_name)
     _apply_plot_runtime_options(plot_opts, module)
     line_colors = _plot_options_get_module(plot_opts, module, ['line', 'model_colors'], None)
@@ -223,6 +233,33 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
     if not recalculate:
         cached = _load_module_cache(cache_file, module, hemisphere)
         if cached is not None and cached.get('payload_kind') == module:
+            cached_window = cached.get('spatial_smoothing_window')
+            cached_threshold = cached.get('sic_threshold')
+            try:
+                config_matches = (
+                    cached_window is not None
+                    and int(cached_window) == spatial_smoothing_window
+                    and cached_threshold is not None
+                    and np.isclose(
+                        float(cached_threshold),
+                        sic_threshold,
+                        rtol=0.0,
+                        atol=1e-12,
+                    )
+                )
+            except (TypeError, ValueError, OverflowError):
+                config_matches = False
+            if not config_matches:
+                logger.info(
+                    "SICB cache is stale because algorithm parameters changed: "
+                    "cached window=%r, threshold=%r; requested window=%d, threshold=%.1f.",
+                    cached_window,
+                    cached_threshold,
+                    spatial_smoothing_window,
+                    sic_threshold,
+                )
+                cached = None
+        if cached is not None and cached.get('payload_kind') == module:
             try:
                 records = cached.get('records', {})
                 obs_seas_file, obs_mon_clim, obs_daily_file = _budget_payload_to_paths(records.get('obs1_budget'))
@@ -361,6 +398,89 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
         model_v_files = all_model_files[2 * n_models:]
         model_labels = _get_recipe_model_labels(module, module_vars, n_models)
 
+        # Detect models whose native u/v components are reported on distinct
+        # staggered grid points (e.g. MPI-ESM/MPIOM Arakawa C-grid models, same
+        # issue already fixed for the SIdrift module). The generic prep_models()
+        # call above only regrids u/v as independent scalars and never rotates
+        # them; the naive `rotate=True` path in Cal_SIC_budget below then wrongly
+        # treats the regridded native x/y components as if they were already
+        # geographic east/north. For those models, regenerate the daily u/v
+        # files via the mrotuvb-aware SIdrift preprocessing (which correctly
+        # rotates native x/y -> east/north -> evaluation-grid x/y before
+        # interpolation) and skip the naive rotation for them downstream.
+        # Other models keep their existing (already-validated) behavior.
+        rotate_flags_per_model: List[bool] = [bool(module_vars.get('rotate_model', True))] * n_models
+        # Force a fresh Cal_SIC_budget recompute (bypass its own daily/seasonal/
+        # monthly cache) only for models whose u/v we regenerate below — their
+        # previously cached budget files were derived from wrongly-rotated
+        # vectors. Other models keep the normal cache-reuse behavior untouched.
+        reuse_existing_default = bool(reuse_processed_inputs or (not recalculate))
+        reuse_flags_per_model: List[bool] = [reuse_existing_default] * n_models
+        u_groups_raw = file_groups[n_models:2 * n_models] if file_groups else []
+        v_groups_raw = file_groups[2 * n_models:3 * n_models] if file_groups else []
+        for _mi in range(min(n_models, len(u_groups_raw), len(v_groups_raw))):
+            _u_grp, _v_grp = u_groups_raw[_mi], v_groups_raw[_mi]
+            if not _u_grp or not _v_grp:
+                continue
+            try:
+                with xr.open_dataset(_u_grp[0]) as _ds_u0, xr.open_dataset(_v_grp[0]) as _ds_v0:
+                    _lon_u, _lat_u = preprocessor._extract_lon_lat_arrays(_ds_u0)
+                    _lon_v, _lat_v = preprocessor._extract_lon_lat_arrays(_ds_v0)
+                _is_staggered = (
+                    _lon_u.shape == _lon_v.shape
+                    and _lat_u.shape == _lat_v.shape
+                    and not (
+                        np.allclose(_lon_u, _lon_v, equal_nan=True)
+                        and np.allclose(_lat_u, _lat_v, equal_nan=True)
+                    )
+                )
+            except Exception as _exc:
+                logger.warning(
+                    "SICB staggered-grid detection failed for model %d (%s); "
+                    "keeping default rotation.", _mi + 1, _exc,
+                )
+                continue
+            if not _is_staggered:
+                continue
+            _label = model_labels[_mi] if _mi < len(model_labels) else f'model_{_mi + 1}'
+
+            # Skip re-processing if a prior fixed run already wrote a
+            # correctly-rotated (target-xy) file at this exact path.
+            _already_fixed = False
+            _out_u_check = os.path.join(data_dir, model_u_files[_mi]) if _mi < len(model_u_files) else None
+            if _out_u_check and os.path.exists(_out_u_check):
+                try:
+                    with xr.open_dataset(_out_u_check) as _ds_check:
+                        _already_fixed = str(_ds_check.attrs.get('sitool_vector_frame', '')) == 'target_xy'
+                except Exception:
+                    _already_fixed = False
+            if _already_fixed:
+                rotate_flags_per_model[_mi] = False
+                continue
+
+            logger.info(
+                "SICB [%s]: model %s reports u/v on distinct staggered grid "
+                "points; regenerating daily u/v via mrotuvb-aware rotation.",
+                hemisphere.upper(), _label,
+            )
+            try:
+                preprocessor.prep_sidrift_models(
+                    u_file_groups=[_u_grp],
+                    v_file_groups=[_v_grp],
+                    model_direction=['auto'],
+                    frequency='daily',
+                    output_dir=data_dir,
+                    overwrite=True,
+                    jobs=max(1, int(jobs)),
+                )
+                rotate_flags_per_model[_mi] = False
+                reuse_flags_per_model[_mi] = False
+            except Exception as _exc:
+                logger.warning(
+                    "SICB: mrotuvb rotation fix failed for model %s (%s); "
+                    "falling back to default rotation.", _label, _exc,
+                )
+
         # Calculate obs1 budget
         if obs_sic and obs_sid:
             obs_seas_file, obs_mon_clim = sicb_metrics.Cal_SIC_budget(
@@ -372,6 +492,8 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 v_key=module_vars.get('ref_var_v', 'v'),
                 hemisphere=hemisphere,
                 rotate=False,
+                ngrid_filter=spatial_smoothing_window,
+                sic_threshold=sic_threshold,
                 output_folder=str(data_dir) + '/',
                 jobs=max(1, int(jobs)),
                 output_label=module_vars.get('ref_label', _sanitize_group_name(obs1_plot_label) or 'obs'),
@@ -390,6 +512,8 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                 v_key=module_vars.get('ref_var_v', 'v'),
                 hemisphere=hemisphere,
                 rotate=False,
+                ngrid_filter=spatial_smoothing_window,
+                sic_threshold=sic_threshold,
                 output_folder=str(data_dir) + '/',
                 jobs=max(1, int(jobs)),
                 output_label=_sanitize_group_name(obs2_plot_label) or 'obs2',
@@ -445,11 +569,13 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     v_file=os.path.join(data_dir, mf_v),
                     v_key=module_vars.get('model_var_v', 'v'),
                     hemisphere=hemisphere,
-                    rotate=module_vars.get('rotate_model', True),
+                    rotate=rotate_flags_per_model[ii],
+                    ngrid_filter=spatial_smoothing_window,
+                    sic_threshold=sic_threshold,
                     output_folder=str(data_dir) + '/',
                     jobs=max(1, int(inner_budget_jobs)),
                     output_label=label,
-                    reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
+                    reuse_existing=reuse_flags_per_model[ii],
                 )
                 payload_file = stage_dir / f'model_{ii:04d}.pkl'
                 _save_pickle_atomic(payload_file, {
@@ -481,11 +607,13 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     v_file=os.path.join(data_dir, mf_v),
                     v_key=module_vars.get('model_var_v', 'v'),
                     hemisphere=hemisphere,
-                    rotate=module_vars.get('rotate_model', True),
+                    rotate=rotate_flags_per_model[ii],
+                    ngrid_filter=spatial_smoothing_window,
+                    sic_threshold=sic_threshold,
                     output_folder=str(data_dir) + '/',
                     jobs=max(1, int(jobs)),
                     output_label=label,
-                    reuse_existing=bool(reuse_processed_inputs or (not recalculate)),
+                    reuse_existing=reuse_flags_per_model[ii],
                 )
                 model_seas_files.append(seas_file)
                 model_mon_clim_files.append(mon_clim)
@@ -547,6 +675,8 @@ def eval_sicb(case_name: str, recipe: RR.RecipeReader,
                     'payload_kind': module,
                     'model_labels': model_labels,
                     'model_records': model_records,
+                    'spatial_smoothing_window': int(spatial_smoothing_window),
+                    'sic_threshold': float(sic_threshold),
                 },
                 records=records,
                 entity_groups=entity_groups,

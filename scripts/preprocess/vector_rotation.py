@@ -134,6 +134,90 @@ def _normalize_components(east: np.ndarray, north: np.ndarray) -> Tuple[np.ndarr
 
 
 # -----------------------------------------------------------------------------
+# Function: `_axis_seam_ratio`.
+# Purpose: Handle axis seam ratio workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _axis_seam_ratio(lon_arr: np.ndarray, lat_arr: np.ndarray, axis: int) -> float:
+    """Ratio of the wrap-around seam step to the typical interior step along one axis.
+
+    A ratio near 1 means index 0 and index -1 are real neighbors (e.g. a global
+    longitude wrap), so differencing across the seam via `np.roll` is valid. A
+    large ratio means the two ends are unrelated grid points (e.g. a model's
+    north-south index that runs from one hemisphere to the other on a global
+    curvilinear grid), so the seam must not be treated as adjacent.
+    """
+    if axis == 1:
+        dlon_int = _wrap_delta_lon_deg(np.diff(lon_arr, axis=1))
+        dlat_int = np.diff(lat_arr, axis=1)
+        dlon_seam = _wrap_delta_lon_deg(lon_arr[:, 0] - lon_arr[:, -1])
+        dlat_seam = lat_arr[:, 0] - lat_arr[:, -1]
+    else:
+        dlon_int = _wrap_delta_lon_deg(np.diff(lon_arr, axis=0))
+        dlat_int = np.diff(lat_arr, axis=0)
+        dlon_seam = _wrap_delta_lon_deg(lon_arr[0, :] - lon_arr[-1, :])
+        dlat_seam = lat_arr[0, :] - lat_arr[-1, :]
+
+    step_int = np.hypot(dlon_int, dlat_int)
+    step_seam = np.hypot(dlon_seam, dlat_seam)
+    med_int = float(np.nanmedian(step_int)) if step_int.size else 0.0
+    med_seam = float(np.nanmedian(step_seam)) if step_seam.size else 0.0
+    if not np.isfinite(med_int) or med_int <= 1e-9:
+        return float('inf')
+    return med_seam / med_int
+
+
+# -----------------------------------------------------------------------------
+# Function: `_axis_is_periodic`.
+# Purpose: Handle axis is periodic workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _axis_is_periodic(lon_arr: np.ndarray, lat_arr: np.ndarray, axis: int, ratio_thresh: float = 3.0) -> bool:
+    """Approximate whether a structured-grid index axis wraps around, from lon/lat alone."""
+    return _axis_seam_ratio(lon_arr, lat_arr, axis) <= ratio_thresh
+
+
+# -----------------------------------------------------------------------------
+# Function: `_axis_gradient`.
+# Purpose: Handle axis gradient workflow for the current execution path.
+# Maintenance: Keep input/output schema stable for upstream and downstream callers.
+# -----------------------------------------------------------------------------
+def _axis_gradient(
+    lon_arr: np.ndarray, lat_arr: np.ndarray, axis: int, periodic: bool,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Finite-difference lon/lat increments along one structured-grid index axis.
+
+    When `periodic` is True, differences may wrap across the seam (index -1 is
+    treated as adjacent to index 0). When False, the seam is never bridged:
+    every row/column uses a forward difference to its real neighbor, except
+    the last one, which uses a backward difference — avoiding a spurious
+    "neighbor" relationship between the two unconnected ends of the axis.
+    """
+    if periodic:
+        d_fwd_lon = _wrap_delta_lon_deg(np.roll(lon_arr, -1, axis=axis) - lon_arr)
+        d_fwd_lat = np.roll(lat_arr, -1, axis=axis) - lat_arr
+        d_bwd_lon = _wrap_delta_lon_deg(lon_arr - np.roll(lon_arr, 1, axis=axis))
+        d_bwd_lat = lat_arr - np.roll(lat_arr, 1, axis=axis)
+        use_fwd = np.isfinite(d_fwd_lon) & np.isfinite(d_fwd_lat)
+        dlon = np.where(use_fwd, d_fwd_lon, d_bwd_lon)
+        dlat = np.where(use_fwd, d_fwd_lat, d_bwd_lat)
+        return dlon, dlat
+
+    dlon = np.empty_like(lon_arr)
+    dlat = np.empty_like(lat_arr)
+    sl_here = tuple(slice(None) if a != axis else slice(0, -1) for a in range(lon_arr.ndim))
+    sl_next = tuple(slice(None) if a != axis else slice(1, None) for a in range(lon_arr.ndim))
+    dlon[sl_here] = _wrap_delta_lon_deg(lon_arr[sl_next] - lon_arr[sl_here])
+    dlat[sl_here] = lat_arr[sl_next] - lat_arr[sl_here]
+
+    sl_last = tuple(slice(None) if a != axis else slice(-1, None) for a in range(lon_arr.ndim))
+    sl_prev = tuple(slice(None) if a != axis else slice(-2, -1) for a in range(lon_arr.ndim))
+    dlon[sl_last] = _wrap_delta_lon_deg(lon_arr[sl_last] - lon_arr[sl_prev])
+    dlat[sl_last] = lat_arr[sl_last] - lat_arr[sl_prev]
+    return dlon, dlat
+
+
+# -----------------------------------------------------------------------------
 # Function: `estimate_structured_basis_from_lonlat`.
 # Purpose: Handle estimate structured basis from lonlat workflow for the current execution path.
 # Maintenance: Keep input/output schema stable for upstream and downstream callers.
@@ -145,6 +229,15 @@ def estimate_structured_basis_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> T
     structured grids. Returned basis fields are unit vectors:
       ex = native x-axis direction in east/north
       ey = native y-axis direction in east/north
+
+    Many CMIP6 sea-ice models report their velocity on a global curvilinear
+    (bipolar/tripolar) grid whose i-index (x) wraps around the globe but
+    whose j-index (y) runs one-way from one hemisphere to the other. Naively
+    differencing with `np.roll` on both axes bridges that non-periodic y-seam
+    (relating, e.g., the northernmost and southernmost grid rows as if they
+    were adjacent), corrupting the rotation estimate near that edge. Axis
+    periodicity is therefore detected from the lon/lat field itself before
+    choosing how to difference each axis.
     """
     lon_arr = np.asarray(lon, dtype=float)
     lat_arr = np.asarray(lat, dtype=float)
@@ -156,25 +249,11 @@ def estimate_structured_basis_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> T
 
     lat_rad = np.deg2rad(lat_arr)
 
-    # Forward/backward i-direction increments.
-    dlon_fx = _wrap_delta_lon_deg(np.roll(lon_arr, -1, axis=1) - lon_arr)
-    dlat_fx = np.roll(lat_arr, -1, axis=1) - lat_arr
-    dlon_bx = _wrap_delta_lon_deg(lon_arr - np.roll(lon_arr, 1, axis=1))
-    dlat_bx = lat_arr - np.roll(lat_arr, 1, axis=1)
+    periodic_x = _axis_is_periodic(lon_arr, lat_arr, axis=1)
+    periodic_y = _axis_is_periodic(lon_arr, lat_arr, axis=0)
 
-    use_fwd_x = np.isfinite(dlon_fx) & np.isfinite(dlat_fx)
-    dlon_x = np.where(use_fwd_x, dlon_fx, dlon_bx)
-    dlat_x = np.where(use_fwd_x, dlat_fx, dlat_bx)
-
-    # Forward/backward j-direction increments.
-    dlon_fy = _wrap_delta_lon_deg(np.roll(lon_arr, -1, axis=0) - lon_arr)
-    dlat_fy = np.roll(lat_arr, -1, axis=0) - lat_arr
-    dlon_by = _wrap_delta_lon_deg(lon_arr - np.roll(lon_arr, 1, axis=0))
-    dlat_by = lat_arr - np.roll(lat_arr, 1, axis=0)
-
-    use_fwd_y = np.isfinite(dlon_fy) & np.isfinite(dlat_fy)
-    dlon_y = np.where(use_fwd_y, dlon_fy, dlon_by)
-    dlat_y = np.where(use_fwd_y, dlat_fy, dlat_by)
+    dlon_x, dlat_x = _axis_gradient(lon_arr, lat_arr, axis=1, periodic=periodic_x)
+    dlon_y, dlat_y = _axis_gradient(lon_arr, lat_arr, axis=0, periodic=periodic_y)
 
     # Convert lon/lat increments to local east/north components (radian distances on unit sphere).
     gx_east = np.deg2rad(dlon_x) * np.cos(lat_rad)
@@ -192,6 +271,8 @@ def estimate_structured_basis_from_lonlat(lon: np.ndarray, lat: np.ndarray) -> T
         "mean_abs_dot": float(np.nanmean(np.abs(dot))),
         "mean_cross": float(np.nanmean(cross)),
         "valid_fraction": float(np.mean(np.isfinite(ex_east) & np.isfinite(ey_east))),
+        "periodic_x": bool(periodic_x),
+        "periodic_y": bool(periodic_y),
     }
 
     basis = {

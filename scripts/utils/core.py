@@ -24,6 +24,7 @@ import pyproj
 import xarray as xr
 from cdo import Cdo
 from scipy.stats import pearsonr
+from scripts.utils.netcdf_io import open_netcdf_dataset, write_netcdf_dataset
 
 from scripts import (
     SITOOL_TMPDIR,
@@ -70,9 +71,11 @@ def write_netcdf_compressed(ds: xr.Dataset, output_file: str, **kwargs) -> None:
     merged_encoding = _compressed_encoding(ds, base=base_encoding)
     if merged_encoding:
         params['encoding'] = merged_encoding
-    ds.to_netcdf(output_file, **params)
+    write_netcdf_dataset(ds, output_file, **params)
 
 __all__ = [
+    "open_netcdf_dataset",
+    "write_netcdf_dataset",
     "_compressed_encoding",
     "write_netcdf_compressed",
 ]

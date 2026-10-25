@@ -6,6 +6,8 @@ from scripts.utils.stats import *
 from scripts.utils.vector import *
 
 __all__ = [
+    "open_netcdf_dataset",
+    "write_netcdf_dataset",
     "_compressed_encoding",
     "write_netcdf_compressed",
     "gen_polar_grid",

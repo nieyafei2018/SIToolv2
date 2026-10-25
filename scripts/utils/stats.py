@@ -433,7 +433,7 @@ def region_index(grid_file, hms, sector='All'):
         https://doi.org/10.5067/CYW3O8ZUNIWC.
     """
 
-    with xr.open_dataset(grid_file) as ds:
+    with open_netcdf_dataset(grid_file) as ds:
         sea_ice_region = np.array(ds['sea_ice_region'])
 
     hms = str(hms or '').lower()
@@ -535,11 +535,11 @@ def extract_grid(nc_file, lon_name, lat_name, grid_file):
     """
     # --- Open file and read variables ---
     try:
-        with xr.open_dataset(nc_file) as ds:
+        with open_netcdf_dataset(nc_file) as ds:
             lon, lat = np.array(ds[lon_name]), np.array(ds[lat_name])
     except Exception:
         # Some files use non-standard time encoding; decode_times=False bypasses that
-        with xr.open_dataset(nc_file, decode_times=False) as ds:
+        with open_netcdf_dataset(nc_file, decode_times=False) as ds:
             lon, lat = np.array(ds[lon_name]), np.array(ds[lat_name])
 
     if lon.ndim == 1:
@@ -644,7 +644,7 @@ def cal_ss_clim_cdo(data_file, var, ss_num, threshold=None):
     try:
         cdo.ymonmean(input=data_file, output=tmp_path)
 
-        with xr.open_dataset(tmp_path) as ds:
+        with open_netcdf_dataset(tmp_path) as ds:
             if threshold:
                 ds = ds.where(ds > threshold, np.nan)
 
